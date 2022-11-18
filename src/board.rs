@@ -183,7 +183,11 @@ impl<'a> Board<'a> {
     pub fn select(&mut self, i: u8) -> Option<Figure> { 
         self.selected = i;
         if i < 64 {
-            return self.pos[i as usize];
+            if let Some(f) = self.pos[i as usize] {
+                if f.side == Side::WHITE {
+                    return Some(f)
+                }
+            }
         }
         None
     }

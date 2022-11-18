@@ -107,7 +107,6 @@ fn main() -> Result<(), String> {
         board.draw(&mut canvas);
 
         if selected_fig.is_some() {
-            println!("BOX");
             canvas.set_draw_color(Color::RGB(255, 0, 0));
             canvas.fill_rect(Rect::from_center(Point::new(inputs.mouse_pos.x as i32 , inputs.mouse_pos.y as i32), 30, 30));
         }
