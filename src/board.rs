@@ -4,7 +4,7 @@ use sdl2::{rect::Rect, pixels::Color, render::{Canvas, Texture}, video::Window};
 use vecm::vec::Vec2i;
 
 
-use crate::{figures::Figure, hashmap};
+use crate::{figures::{Figure, Side, FigureType}, hashmap};
 
 
 
@@ -15,8 +15,9 @@ use crate::{figures::Figure, hashmap};
 pub struct Board<'a> {
     white_rects: Vec<Rect>,
     black_rects: Vec<Rect>,
-    figure_atlas_cords: HashMap<String, Rect>,
-    pieces_texture: &'a Texture<'a>
+    figure_atlas_cords: HashMap<i32, Rect>,
+    pieces_texture: &'a Texture<'a>,
+    pos: [Option<Figure>; 64]
 }
 
 
@@ -40,35 +41,92 @@ impl<'a> Board<'a> {
 
 
 
-        Self {white_rects, black_rects, figure_atlas_cords: Self::gen_fig_atlas_cords(90), pieces_texture}
+
+        Self {
+            white_rects, 
+            black_rects, 
+            figure_atlas_cords: Self::gen_fig_atlas_cords(90), 
+            pieces_texture, pos: Self::gen_start_pos()
+        }
     }
 
-    fn gen_fig_atlas_cords(fig_size: u32) -> HashMap<String, Rect> {
-        let figure_atlas_lr_cords: HashMap<&str, (i32, i32)> = hashmap![
+    fn gen_start_pos() -> [Option<Figure>; 64] {
+        let mut start_pos: [Option<Figure>; 64] = [None; 64];
 
-            "king_white" => (0, 0),
-            "king_black" => (0, 1),
+        //gen black
+        let mut side = Side::WHITE;
+        //pawns
+        for i in 8..=15 {
+            start_pos[i] = Some(Figure::new(FigureType::PAWN, side, 11));
+        }
+        //knights
+        start_pos[0] = Some(Figure::new(FigureType::KNIGHT, side, 9));
+        start_pos[7] = Some(Figure::new(FigureType::KNIGHT, side, 9));
 
-            "queen_white" => (1, 0),
-            "queen_black" => (1, 1),
+        //rooks
+        start_pos[1] = Some(Figure::new(FigureType::ROOK, side, 7));
+        start_pos[6] = Some(Figure::new(FigureType::ROOK, side, 7));
 
-            "bishop_white" => (2, 0),
-            "bishop_black" => (2, 1),
+        //bishops
+        start_pos[2] = Some(Figure::new(FigureType::BISHOP, side, 5));
+        start_pos[5] = Some(Figure::new(FigureType::BISHOP, side, 5));
 
-            "rook_white" => (3, 0),
-            "rook_black" => (3, 1),
+        //king & queen
+        start_pos[3] = Some(Figure::new(FigureType::QUEEN, side, 3));
+        start_pos[4] = Some(Figure::new(FigureType::KING, side, 1));
 
-            "knight_white" => (4, 0),
-            "knight_black" => (4, 1),
+        //gen white
+        side = Side::WHITE;
+        //pawns
+        for i in 48..=55 {
+            start_pos[i] = Some(Figure::new(FigureType::PAWN, side, 10));
+        }
+        //knights
+        start_pos[56] = Some(Figure::new(FigureType::KNIGHT, side, 8));
+        start_pos[63] = Some(Figure::new(FigureType::KNIGHT, side, 8));
 
-            "pawn_white" => (5, 0),
-            "pawn_black" => (5, 1)
+        //rooks
+        start_pos[57] = Some(Figure::new(FigureType::ROOK, side, 6));
+        start_pos[62] = Some(Figure::new(FigureType::ROOK, side, 6));
+
+        //bishops
+        start_pos[58] = Some(Figure::new(FigureType::BISHOP, side, 4));
+        start_pos[61] = Some(Figure::new(FigureType::BISHOP, side, 4));
+
+        //king & queen
+        start_pos[59] = Some(Figure::new(FigureType::QUEEN, side, 2));
+        start_pos[60] = Some(Figure::new(FigureType::KING, side, 0));
+
+
+        start_pos
+    }
+
+    fn gen_fig_atlas_cords(fig_size: u32) -> HashMap<i32, Rect> {
+        let figure_atlas_lr_cords: HashMap<i32, (i32, i32)> = hashmap![
+
+            0 => (0, 0), //king_white
+            1 => (0, 1), //king_black
+
+            2 => (1, 0), //queen_white
+            3 => (1, 1), //queen_black
+
+            4 => (2, 0), //bishop_white
+            5 => (2, 1), //bishop_black
+
+            6 => (3, 0), //rook_white
+            7 => (3, 1), //rook_black
+
+            8 => (4, 0), //knight_white
+            9 => (4, 1), //knight_black
+
+            10 => (5, 0), //pawn_white
+            11 => (5, 1) //pawn_black
 
         ];
 
         figure_atlas_lr_cords.iter()
         .enumerate()
-        .map(|(i, (k, lr_cords))| (k.to_string(), Rect::new((lr_cords.0 * fig_size as i32) as i32, (lr_cords.1 * fig_size as i32) as i32,fig_size, fig_size))).collect()
+        .map(|(i, (k, lr_cords))| (*k, Rect::new((lr_cords.0 * fig_size as i32) as i32, (lr_cords.1 * fig_size as i32) as i32,fig_size, fig_size))).collect()
     }
 
     pub fn draw(&self, canvas: &mut Canvas<Window>) {
@@ -80,7 +138,22 @@ impl<'a> Board<'a> {
 
         //draw figures
         let size = 50;
-        let mut y = -(size as i32);
+
+        self.pos.iter()
+            .enumerate()
+            .filter(|(_,f)| f.is_some())
+            .for_each(|(i, f)| {
+                let x = ((i % 8) * size) as i32;
+                let y = ((i / 8) * size) as i32;
+
+                let f = f.unwrap();
+                let src = self.figure_atlas_cords.get(&f.tex_id)
+                    .unwrap_or_else(|| panic!("Created figure with wrong index {}", f.tex_id));
+                let dst = Rect::new(x,y, 50,50);
+                canvas.copy(self.pieces_texture, *src, dst);
+            })
+
+        /*let mut y = -(size as i32);
         let mut x = 0;
         self.figure_atlas_cords.iter()
         .enumerate()
@@ -89,7 +162,12 @@ impl<'a> Board<'a> {
             x = ((i % 7) * size) as i32;
             println!("Rendering {} at ({},{}) from {:?}", k, x, y, v);
             canvas.copy(self.pieces_texture, *v, Rect::new(x,y, 50,50));
-        });
+        });*/
 
     }
+
+    /*pub fn x() -> &[] {
+
+    }*/
+
 }
