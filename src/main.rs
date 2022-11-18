@@ -52,7 +52,6 @@ fn main() -> Result<(), String> {
     let pieces_texture = texture_creator.load_texture(chess_pieces)?;
     let tex_atlas = TextureAtlas::new(&pieces_texture, 90);
     let mut board = Board::new(&tex_atlas);
-    let mut selected_fig: Option<Figure> = None;
 
     let mut s_tick = 0.0;
     let s_tick_increment = 200.0;
@@ -107,18 +106,26 @@ fn main() -> Result<(), String> {
 
         if inputs.pressed(Control::Escape) {
             board.unselect();
-            selected_fig = None;
         }
 
 
-
-
+        /* 
         if inputs.left_click {
             if selected_fig.is_none() {
                 selected_fig = board.select(i);
             } else {
                 if board.move_figure(i) {
                     selected_fig = None;
+                }
+            }
+        }*/
+
+        if inputs.left_click {
+            if board.selected.is_none() {
+                board.select(i);
+            } else {
+                if board.move_figure(i) {
+                    println!("was valid");
                 }
             }
         }
@@ -128,7 +135,7 @@ fn main() -> Result<(), String> {
 
         board.draw(&mut canvas);
 
-        if let Some(f) = selected_fig {
+        if let Some(f) = board.get_selected_fig() {
             if s_tick + s_tick_increment*dt >= 255.0 {
                 s_tick = 0.0;
             } else {

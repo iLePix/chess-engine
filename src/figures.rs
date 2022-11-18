@@ -1,12 +1,12 @@
 
 #[derive(Clone, Copy)]
 pub enum FigureType {
-    QUEEN,
-    KING,
-    KNIGHT,
-    BISHOP,
-    ROOK,
-    PAWN,
+    Queen,
+    King,
+    Knight,
+    Bishop,
+    Rook,
+    Pawn,
 }
 
 
@@ -28,6 +28,6 @@ impl Figure  {
 
 #[derive(Clone, Copy, PartialEq)]
 pub enum Side {
-    BLACK,
-    WHITE
+    Black,
+    White
 }
