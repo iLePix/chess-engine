@@ -18,7 +18,7 @@ use vecm::vec::{Vec2i, Vec2u, Vec2};
 
 use std::path::Path;
 //use world::celo::Celo;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 mod input; 
 
@@ -51,13 +51,19 @@ fn main() -> Result<(), String> {
     let texture_creator = canvas.texture_creator();
     let pieces_texture = texture_creator.load_texture(chess_pieces)?;
     let tex_atlas = TextureAtlas::new(&pieces_texture, 90);
-    let mut board = Board::new(&pieces_texture, &tex_atlas);
+    let mut board = Board::new(&tex_atlas);
     let mut selected_fig: Option<Figure> = None;
 
-    let mut s_tick = 0;
-    let s_tick_increment = 3;
+    let mut s_tick = 0.0;
+    let s_tick_increment = 200.0;
+
+    let mut last_frame_time = Instant::now();
 
     'running: loop {
+        let current_frame_time = Instant::now();
+        let dt = (current_frame_time - last_frame_time).as_secs_f32();
+        last_frame_time = current_frame_time;
+
         canvas.set_draw_color(Color::RGB(0, 0, 0));
         canvas.clear();
         for event in event_pump.poll_iter() {
@@ -105,6 +111,8 @@ fn main() -> Result<(), String> {
         }
 
 
+
+
         if inputs.left_click {
             if selected_fig.is_none() {
                 selected_fig = board.select(i);
@@ -117,31 +125,33 @@ fn main() -> Result<(), String> {
         
 
 
+
         board.draw(&mut canvas);
 
         if let Some(f) = selected_fig {
-            if s_tick as i32 + s_tick_increment as i32  >= 255 {
-                s_tick = 0;
+            if s_tick + s_tick_increment*dt >= 255.0 {
+                s_tick = 0.0;
             } else {
-                s_tick += s_tick_increment;
+                s_tick += dt * s_tick_increment as f32;
             }
-            let p = parabola(s_tick) / 20.0;
+
+            let p = (parabola(s_tick as i32) / 20.0);
             let size = 50 + p as u32;
             let src = tex_atlas.figure_atlas_cords.get(&f.tex_id)
-                    .unwrap_or_else(|| panic!("Created figure with wrong index {}", f.tex_id));
+                    .unwrap_or_else(|| panic!("Created figure with wrong tex-index {}", f.tex_id));
             let dst = Rect::from_center(Point::new(inputs.mouse_pos.x as i32 , inputs.mouse_pos.y as i32), size, size);
-            canvas.copy(tex_atlas.pieces_texture, *src, dst);
-            //canvas.set_draw_color(Color::RGB(255, 0, 0));
-            //canvas.fill_rect(Rect::from_center(Point::new(inputs.mouse_pos.x as i32 , inputs.mouse_pos.y as i32), 30, 30));
-        } else {
-            s_tick = 0;
+            canvas.copy(tex_atlas.pieces_texture, *src, dst).unwrap();
+          } else {
+            s_tick = 0.0;
         }
 
         
         canvas.present();
+        
+        use sdl2::mouse::MouseButton::*;
+        inputs.mouse_up(Left);
+        inputs.mouse_up(Right);
 
-
-        ::std::thread::sleep(Duration::new(0, 1_000_000_000u32 / 60));
     }
 
     Ok(())

@@ -11,7 +11,7 @@ pub struct InputHandler {
     pub right_click: bool,
     pub mouse_pos: Vec2u,
     mouse_delta: Vec2i,
-    mouse_wheel_delta: i32,
+    mouse_wheel_delta: i32
 }
 
 
@@ -68,7 +68,14 @@ key_mappings! {
 impl InputHandler {
 
     pub fn new() -> InputHandler {
-        InputHandler { pressed: HashMap::new(), left_click: false, right_click: false,mouse_pos: Vec2u::zero(), mouse_delta: Vec2i::zero(), mouse_wheel_delta: 0 }
+        InputHandler { 
+            pressed: HashMap::new(),
+            left_click: false, 
+            right_click: false,
+            mouse_pos: Vec2u::zero(), 
+            mouse_delta: Vec2i::zero(),
+            mouse_wheel_delta: 0
+        }
     }
 
     pub fn add_mouse_delta(&mut self, delta: Vec2i) {

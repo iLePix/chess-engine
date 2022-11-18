@@ -23,13 +23,12 @@ pub struct Board<'a> {
 
 
 impl<'a> Board<'a> {
-    pub fn new(pieces_texture: &'a Texture, tex_atlas: &'a TextureAtlas) -> Self {
+    pub fn new(tex_atlas: &'a TextureAtlas) -> Self {
         let mut white_rects: Vec<Rect> = vec![];
         let mut black_rects: Vec<Rect> = vec![];
         for i in 0..8 {
             for n in 0..8 {
                 let rect = Rect::new(50 * i, 50 * n, 50, 50);
-                let mut color = Color::WHITE;
                 if (i % 2 == 1 && n % 2 == 0) || (i % 2 == 0 && n % 2 == 1) {
                     //color = black
                     black_rects.push(rect);
@@ -107,10 +106,10 @@ impl<'a> Board<'a> {
 
     pub fn draw(&self, canvas: &mut Canvas<Window>) {
         canvas.set_draw_color(Color::RGB(250,232,168,)); // rgba(250,232,168,255)
-        canvas.fill_rects(&self.white_rects);
+        canvas.fill_rects(&self.white_rects).unwrap();
 
         canvas.set_draw_color(Color::RGB(20,95,75));
-        canvas.fill_rects(&self.black_rects);
+        canvas.fill_rects(&self.black_rects).unwrap();
 
         //draw figures
 
@@ -136,28 +135,15 @@ impl<'a> Board<'a> {
                 let src = self.tex_atlas.figure_atlas_cords.get(&f.tex_id)
                     .unwrap_or_else(|| panic!("Created figure with wrong index {}", f.tex_id));
                 let dst = Rect::new(x,y, size as u32,size as u32);
-                canvas.copy(self.tex_atlas.pieces_texture, *src, dst);
+                canvas.copy(self.tex_atlas.pieces_texture, *src, dst).unwrap();
             })
-
-        /*let mut y = -(size as i32);
-        let mut x = 0;
-        self.figure_atlas_cords.iter()
-        .enumerate()
-        .for_each(|(i, (k,v))| {
-            if i % 7 == 0 {y += 50}
-            x = ((i % 7) * size) as i32;
-            println!("Rendering {} at ({},{}) from {:?}", k, x, y, v);
-            canvas.copy(self.pieces_texture, *v, Rect::new(x,y, 50,50));
-        });*/
-
     }
 
     pub fn select(&mut self, i: u8) -> Option<Figure> { 
-        //println!("aa");
-        /*if i == self.selected { // FOR PUTTING BACK - BUT we only works when mouse has only been pressed once
+        if i == self.selected { // FOR PUTTING BACK - BUT we only works when mouse has only been pressed once
             self.selected = 255;
             return None;
-        }*/
+        }
         self.selected = i;
         if i < 64 {
             if let Some(f) = self.pos[i as usize] {
