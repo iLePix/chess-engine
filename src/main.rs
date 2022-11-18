@@ -1,7 +1,9 @@
 pub mod figures;
 pub mod board;
 pub mod macros;
+pub mod atlas;
 
+use atlas::TextureAtlas;
 use board::Board;
 use figures::Figure;
 use input::InputHandler;
@@ -48,8 +50,13 @@ fn main() -> Result<(), String> {
     let chess_pieces = &Path::new("../../res/chess_pieces.png");
     let texture_creator = canvas.texture_creator();
     let pieces_texture = texture_creator.load_texture(chess_pieces)?;
-    let mut board = Board::new(&pieces_texture);
+    let tex_atlas = TextureAtlas::new(&pieces_texture, 90);
+    let mut board = Board::new(&pieces_texture, &tex_atlas);
     let mut selected_fig: Option<Figure> = None;
+
+    let mut s_tick = 0;
+    let s_tick_increment = 3;
+
     'running: loop {
         canvas.set_draw_color(Color::RGB(0, 0, 0));
         canvas.clear();
@@ -99,16 +106,35 @@ fn main() -> Result<(), String> {
 
 
         if inputs.left_click {
-            selected_fig = board.select(i);
+            if selected_fig.is_none() {
+                selected_fig = board.select(i);
+            } else {
+                if board.move_figure(i) {
+                    selected_fig = None;
+                }
+            }
         }
         
 
 
         board.draw(&mut canvas);
 
-        if selected_fig.is_some() {
-            canvas.set_draw_color(Color::RGB(255, 0, 0));
-            canvas.fill_rect(Rect::from_center(Point::new(inputs.mouse_pos.x as i32 , inputs.mouse_pos.y as i32), 30, 30));
+        if let Some(f) = selected_fig {
+            if s_tick as i32 + s_tick_increment as i32  >= 255 {
+                s_tick = 0;
+            } else {
+                s_tick += s_tick_increment;
+            }
+            let p = parabola(s_tick) / 20.0;
+            let size = 50 + p as u32;
+            let src = tex_atlas.figure_atlas_cords.get(&f.tex_id)
+                    .unwrap_or_else(|| panic!("Created figure with wrong index {}", f.tex_id));
+            let dst = Rect::from_center(Point::new(inputs.mouse_pos.x as i32 , inputs.mouse_pos.y as i32), size, size);
+            canvas.copy(tex_atlas.pieces_texture, *src, dst);
+            //canvas.set_draw_color(Color::RGB(255, 0, 0));
+            //canvas.fill_rect(Rect::from_center(Point::new(inputs.mouse_pos.x as i32 , inputs.mouse_pos.y as i32), 30, 30));
+        } else {
+            s_tick = 0;
         }
 
         
@@ -119,6 +145,16 @@ fn main() -> Result<(), String> {
     }
 
     Ok(())
+}
+
+
+
+fn parabola(x: i32) -> f32 {
+    -1.0 * pow(0.125 * x as f32 - 16.0) + 256.0
+}
+
+fn pow(x: f32) -> f32 {
+    x * x
 }
 
 

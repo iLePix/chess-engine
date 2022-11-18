@@ -4,7 +4,7 @@ use sdl2::{rect::Rect, pixels::Color, render::{Canvas, Texture}, video::Window};
 use vecm::vec::Vec2i;
 
 
-use crate::{figures::{Figure, Side, FigureType}, hashmap, count};
+use crate::{figures::{Figure, Side, FigureType}, hashmap, count, atlas::TextureAtlas};
 
 
 
@@ -15,8 +15,7 @@ use crate::{figures::{Figure, Side, FigureType}, hashmap, count};
 pub struct Board<'a> {
     white_rects: Vec<Rect>,
     black_rects: Vec<Rect>,
-    figure_atlas_cords: HashMap<i32, Rect>,
-    pieces_texture: &'a Texture<'a>,
+    tex_atlas: &'a TextureAtlas<'a>,
     pos: [Option<Figure>; 64],
     hovering: u8,
     selected: u8
@@ -24,7 +23,7 @@ pub struct Board<'a> {
 
 
 impl<'a> Board<'a> {
-    pub fn new(pieces_texture: &'a Texture) -> Self {
+    pub fn new(pieces_texture: &'a Texture, tex_atlas: &'a TextureAtlas) -> Self {
         let mut white_rects: Vec<Rect> = vec![];
         let mut black_rects: Vec<Rect> = vec![];
         for i in 0..8 {
@@ -47,8 +46,8 @@ impl<'a> Board<'a> {
         Self {
             white_rects, 
             black_rects, 
-            figure_atlas_cords: Self::gen_fig_atlas_cords(90), 
-            pieces_texture, pos: Self::gen_start_pos(),
+            pos: Self::gen_start_pos(),
+            tex_atlas,
             hovering: 64,
             selected: 64
         }
@@ -105,33 +104,6 @@ impl<'a> Board<'a> {
         start_pos
     }
 
-    fn gen_fig_atlas_cords(fig_size: u32) -> HashMap<i32, Rect> {
-        let figure_atlas_lr_cords: HashMap<i32, (i32, i32)> = hashmap![
-
-            0 => (0, 0), //king_white
-            1 => (0, 1), //king_black
-
-            2 => (1, 0), //queen_white
-            3 => (1, 1), //queen_black
-
-            4 => (2, 0), //bishop_white
-            5 => (2, 1), //bishop_black
-
-            6 => (3, 0), //rook_white
-            7 => (3, 1), //rook_black
-
-            8 => (4, 0), //knight_white
-            9 => (4, 1), //knight_black
-
-            10 => (5, 0), //pawn_white
-            11 => (5, 1) //pawn_black
-
-        ];
-
-        figure_atlas_lr_cords.iter()
-        .enumerate()
-        .map(|(i, (k, lr_cords))| (*k, Rect::new((lr_cords.0 * fig_size as i32) as i32, (lr_cords.1 * fig_size as i32) as i32,fig_size, fig_size))).collect()
-    }
 
     pub fn draw(&self, canvas: &mut Canvas<Window>) {
         canvas.set_draw_color(Color::RGB(250,232,168,)); // rgba(250,232,168,255)
@@ -161,10 +133,10 @@ impl<'a> Board<'a> {
                     }
 
                 }
-                let src = self.figure_atlas_cords.get(&f.tex_id)
+                let src = self.tex_atlas.figure_atlas_cords.get(&f.tex_id)
                     .unwrap_or_else(|| panic!("Created figure with wrong index {}", f.tex_id));
                 let dst = Rect::new(x,y, size as u32,size as u32);
-                canvas.copy(self.pieces_texture, *src, dst);
+                canvas.copy(self.tex_atlas.pieces_texture, *src, dst);
             })
 
         /*let mut y = -(size as i32);
@@ -181,6 +153,11 @@ impl<'a> Board<'a> {
     }
 
     pub fn select(&mut self, i: u8) -> Option<Figure> { 
+        //println!("aa");
+        /*if i == self.selected { // FOR PUTTING BACK - BUT we only works when mouse has only been pressed once
+            self.selected = 255;
+            return None;
+        }*/
         self.selected = i;
         if i < 64 {
             if let Some(f) = self.pos[i as usize] {
@@ -192,8 +169,20 @@ impl<'a> Board<'a> {
         None
     }
 
+    pub fn move_figure(&mut self, dst: u8) -> bool {
+        if dst < 64 {
+            if dst == self.selected {
+                return false
+            }
+            self.pos[dst as usize] = self.pos[self.selected as usize];
+            self.pos[self.selected as usize] = None;
+            self.unselect();
+        }
+        true //bc every move is allowed rn
+    }
+
     pub fn unselect(&mut self) {
-        self.select(255);
+        self.selected = 255;
     }
 
     pub fn hover(&mut self, i: u8) {
