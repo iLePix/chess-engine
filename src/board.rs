@@ -4,7 +4,7 @@ use sdl2::{rect::Rect, pixels::Color, render::{Canvas, Texture}, video::Window};
 use vecm::vec::Vec2i;
 
 
-use crate::{figures::{Figure, Side, FigureType}, hashmap};
+use crate::{figures::{Figure, Side, FigureType}, hashmap, count};
 
 
 
