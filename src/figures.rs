@@ -12,8 +12,8 @@ pub enum FigureType {
 
 #[derive(Clone, Copy)]
 pub struct Figure {
-    ty: FigureType,
-    side: Side,
+    pub ty: FigureType,
+    pub side: Side,
     pub tex_id: i32, 
 }
 
@@ -26,7 +26,7 @@ impl Figure  {
 
 //king, rook, bishop, queen, knight, and pawn.
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq)]
 pub enum Side {
     BLACK,
     WHITE

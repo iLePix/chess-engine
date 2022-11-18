@@ -47,7 +47,7 @@ fn main() -> Result<(), String> {
     let chess_pieces = &Path::new("../../res/chess_pieces.png");
     let texture_creator = canvas.texture_creator();
     let pieces_texture = texture_creator.load_texture(chess_pieces)?;
-    let board = Board::new(&pieces_texture);
+    let mut board = Board::new(&pieces_texture);
     'running: loop {
         canvas.set_draw_color(Color::RGB(0, 0, 0));
         canvas.clear();
@@ -107,29 +107,15 @@ fn main() -> Result<(), String> {
             }
         }
 
-        /*for i in 0..8 {
-            for n in 0..8 {
-                if (i % 2 == 1 && n % 2 == 0) || (i % 2 == 0 && n % 2 == 1) {
-                    canvas.set_draw_color(Color::BLACK);
-                } else {
-                    canvas.set_draw_color(Color::WHITE); 
-                }
-                let rect = Rect::new(50 * i, 50 * n, 50, 50);
-                canvas.fill_rect(rect);
-            }
-        }*/
-
+        let x = inputs.mouse_pos.x / 50;
+        let y = inputs.mouse_pos.y / 50;
+        board.select((x + y*8) as u8);
     
     
 
         board.draw(&mut canvas);
 
-        //canvas.copy(&texture, Rect::new(0,0, 90, 90), Rect::new(50,0,50, 50))?;
-
-        //canvas.draw_color(Color::BLACK);
-        /*canvas.set_draw_color(Color::WHITE);
-        let rect = Rect::new(0, 0, 50, 50);
-        canvas.fill_rect(rect);*/
+        
         canvas.present();
 
 

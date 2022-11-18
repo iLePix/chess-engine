@@ -17,7 +17,8 @@ pub struct Board<'a> {
     black_rects: Vec<Rect>,
     figure_atlas_cords: HashMap<i32, Rect>,
     pieces_texture: &'a Texture<'a>,
-    pos: [Option<Figure>; 64]
+    pos: [Option<Figure>; 64],
+    selected: u8
 }
 
 
@@ -46,7 +47,8 @@ impl<'a> Board<'a> {
             white_rects, 
             black_rects, 
             figure_atlas_cords: Self::gen_fig_atlas_cords(90), 
-            pieces_texture, pos: Self::gen_start_pos()
+            pieces_texture, pos: Self::gen_start_pos(),
+            selected: 64
         }
     }
 
@@ -54,7 +56,7 @@ impl<'a> Board<'a> {
         let mut start_pos: [Option<Figure>; 64] = [None; 64];
 
         //gen black
-        let mut side = Side::WHITE;
+        let mut side = Side::BLACK;
         //pawns
         for i in 8..=15 {
             start_pos[i] = Some(Figure::new(FigureType::PAWN, side, 11));
@@ -137,19 +139,23 @@ impl<'a> Board<'a> {
         canvas.fill_rects(&self.black_rects);
 
         //draw figures
-        let size = 50;
 
         self.pos.iter()
             .enumerate()
             .filter(|(_,f)| f.is_some())
             .for_each(|(i, f)| {
-                let x = ((i % 8) * size) as i32;
-                let y = ((i / 8) * size) as i32;
-
+                let mut size = 50;
+                let mut x = ((i % 8) * size) as i32;
+                let mut y = ((i / 8) * size) as i32;
                 let f = f.unwrap();
+                if self.selected == i as u8 && f.side == Side::WHITE {
+                    x -= 5;
+                    y -= 5;
+                    size += 10;
+                }
                 let src = self.figure_atlas_cords.get(&f.tex_id)
                     .unwrap_or_else(|| panic!("Created figure with wrong index {}", f.tex_id));
-                let dst = Rect::new(x,y, 50,50);
+                let dst = Rect::new(x,y, size as u32,size as u32);
                 canvas.copy(self.pieces_texture, *src, dst);
             })
 
@@ -164,6 +170,14 @@ impl<'a> Board<'a> {
             canvas.copy(self.pieces_texture, *v, Rect::new(x,y, 50,50));
         });*/
 
+    }
+
+    pub fn select(&mut self, i: u8) {
+        self.selected = i;
+    }
+
+    pub fn unselect(&mut self) {
+        self.select(255);
     }
 
     /*pub fn x() -> &[] {
