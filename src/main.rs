@@ -3,6 +3,7 @@ pub mod board;
 pub mod macros;
 
 use board::Board;
+use figures::Figure;
 use input::InputHandler;
 use sdl2::image::{LoadTexture, InitFlag};
 use sdl2::pixels::Color;
@@ -48,6 +49,7 @@ fn main() -> Result<(), String> {
     let texture_creator = canvas.texture_creator();
     let pieces_texture = texture_creator.load_texture(chess_pieces)?;
     let mut board = Board::new(&pieces_texture);
+    let mut selected_fig: Option<Figure> = None;
     'running: loop {
         canvas.set_draw_color(Color::RGB(0, 0, 0));
         canvas.clear();
@@ -75,45 +77,40 @@ fn main() -> Result<(), String> {
                         inputs.set_key(key, false);
                     }
                 },
-                /*Event::KeyDown { keycode: Some(Keycode::Escape), .. } => {
-                    break 'running;
+                Event::MouseButtonDown{ mouse_btn, ..} => {
+                    inputs.mouse_down(mouse_btn)
                 },
-                Event::KeyDown { keycode: Some(Keycode::Left), repeat: true, .. } => {
-                    camera.offset.x += offset_increment;
+                Event::MouseButtonUp{ mouse_btn, ..} => {
+                    inputs.mouse_up(mouse_btn)
                 },
-                Event::KeyDown { keycode: Some(Keycode::Right), repeat: true, .. } => {
-                    camera.offset.x -= offset_increment;
-                },
-                Event::KeyDown { keycode: Some(Keycode::Up), repeat: true, .. } => {
-                    camera.offset.y += offset_increment;
-                },
-                Event::KeyDown { keycode: Some(Keycode::Down), repeat: true,.. } => {
-                    println!("go");
-                    camera.offset.y -= offset_increment;
-                },
-                Event::KeyDown { keycode: Some(Keycode::Plus), repeat: true, .. } => {
-                    camera.zoom_in();
-                },
-                Event::KeyDown { keycode: Some(Keycode::Minus), repeat: false, .. } => {
-                    camera.zoom_out();
-                },
-                Event::KeyUp { keycode: Some(Keycode::Left), repeat: false, .. } |
-                Event::KeyUp { keycode: Some(Keycode::Right), repeat: false, .. } |
-                Event::KeyUp { keycode: Some(Keycode::Up), repeat: false, .. } |
-                Event::KeyUp { keycode: Some(Keycode::Down), repeat: false, .. } => {
-                    println!("stop");
-                },*/
                 _ => {}
             }
         }
 
-        let x = inputs.mouse_pos.x / 50;
-        let y = inputs.mouse_pos.y / 50;
-        board.select((x + y*8) as u8);
-    
-    
+        let sx = inputs.mouse_pos.x / 50;
+        let sy = inputs.mouse_pos.y / 50;
+        let i = (sx + sy*8) as u8;
+        board.hover(i);
+
+        if inputs.pressed(Control::Escape) {
+            board.unselect();
+            selected_fig = None;
+        }
+
+
+        if inputs.left_click {
+            selected_fig = board.select(i);
+        }
+        
+
 
         board.draw(&mut canvas);
+
+        if selected_fig.is_some() {
+            println!("BOX");
+            canvas.set_draw_color(Color::RGB(255, 0, 0));
+            canvas.fill_rect(Rect::from_center(Point::new(inputs.mouse_pos.x as i32 , inputs.mouse_pos.y as i32), 30, 30));
+        }
 
         
         canvas.present();

@@ -18,6 +18,7 @@ pub struct Board<'a> {
     figure_atlas_cords: HashMap<i32, Rect>,
     pieces_texture: &'a Texture<'a>,
     pos: [Option<Figure>; 64],
+    hovering: u8,
     selected: u8
 }
 
@@ -48,6 +49,7 @@ impl<'a> Board<'a> {
             black_rects, 
             figure_atlas_cords: Self::gen_fig_atlas_cords(90), 
             pieces_texture, pos: Self::gen_start_pos(),
+            hovering: 64,
             selected: 64
         }
     }
@@ -148,10 +150,16 @@ impl<'a> Board<'a> {
                 let mut x = ((i % 8) * size) as i32;
                 let mut y = ((i / 8) * size) as i32;
                 let f = f.unwrap();
-                if self.selected == i as u8 && f.side == Side::WHITE {
-                    x -= 5;
-                    y -= 5;
-                    size += 10;
+                if f.side == Side::WHITE {
+                    if self.selected == i as u8 {
+                        return
+                    }
+                    if self.hovering == i as u8 {
+                        x -= 5;
+                        y -= 5;
+                        size += 10;
+                    }
+
                 }
                 let src = self.figure_atlas_cords.get(&f.tex_id)
                     .unwrap_or_else(|| panic!("Created figure with wrong index {}", f.tex_id));
@@ -172,12 +180,20 @@ impl<'a> Board<'a> {
 
     }
 
-    pub fn select(&mut self, i: u8) {
+    pub fn select(&mut self, i: u8) -> Option<Figure> { 
         self.selected = i;
+        if i < 64 {
+            return self.pos[i as usize];
+        }
+        None
     }
 
     pub fn unselect(&mut self) {
         self.select(255);
+    }
+
+    pub fn hover(&mut self, i: u8) {
+        self.hovering = i;
     }
 
     /*pub fn x() -> &[] {

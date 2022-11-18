@@ -42,6 +42,7 @@ macro_rules! key_mappings {
                 }
             }
 
+
             pub fn press_controls() -> Vec<Control> {
                 vec![
                     $(Control::$press_control_match),*,
@@ -56,7 +57,8 @@ key_mappings! {
     Up => W,
     Down => S,
     Left => A,
-    Right => D
+    Right => D,
+    Escape => Escape
   press:
     ZoomIn => Plus,
     ZoomOut => Minus
@@ -83,6 +85,23 @@ impl InputHandler {
     pub fn set_key(&mut self, key: Keycode, down: bool) {
         match Control::from_keycode(key) {
             Some(control) => { self.pressed.insert(control, down); },
+            _ => ()
+        }
+    }
+
+    pub fn mouse_down(&mut self, button: sdl2::mouse::MouseButton) {
+        use sdl2::mouse::MouseButton::*;
+        match button {
+            Left => self.left_click = true,
+            Right => self.right_click = true,
+            _ => ()
+        }
+    }
+    pub fn mouse_up(&mut self, button: sdl2::mouse::MouseButton) {
+        use sdl2::mouse::MouseButton::*;
+        match button {
+            Left => self.left_click = false,
+            Right => self.right_click = false,
             _ => ()
         }
     }
