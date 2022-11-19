@@ -133,14 +133,26 @@ impl<'a> Board<'a> {
 
         self.valid_moves_for_selected_fig.iter()
             .for_each(|i| {
-                let mut size: u32 = 50;
-                let mut x = ((i % 8) as u32 * size) as i32;
-                let mut y = ((i / 8) as u32 * size) as i32;
+                let size: u32 = 50;
+                let x = ((i % 8) as u32 * size) as i32;
+                let y = ((i / 8) as u32 * size) as i32;
                 let indicator_size = self.valid_mvs_tick as u32;
                 let r = Rect::from_center(Point::new(x + size as i32 /2, y + size as i32 /2), indicator_size, indicator_size);
                 canvas.set_draw_color(Color::RGBA(3, 138, 255, 128));
                 canvas.fill_rect(r).unwrap();
             });
+
+        //draw selection
+        if let Some(selected) = self.selected {
+            let size: u32 = 50;
+            let x = ((selected % 8) as u32 * size) as i32;
+            let y = ((selected / 8) as u32 * size) as i32;
+            let indicator_size = self.valid_mvs_tick as u32;
+            let s_r = Rect::from_center(Point::new(x + size as i32 /2, y + size as i32 /2), indicator_size, indicator_size);
+            canvas.set_draw_color(Color::RGBA(255, 153, 128, 200));
+            canvas.fill_rect(s_r).unwrap();
+        }
+
 
         //draw figures
         self.pos.iter()
