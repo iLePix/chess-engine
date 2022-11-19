@@ -18,7 +18,10 @@ pub struct Board<'a> {
     tex_atlas: &'a TextureAtlas<'a>,
     pos: [Option<Figure>; 64],
     hovering: Option<u8>,
-    pub selected: Option<u8>
+    pub selected: Option<u8>,
+    beaten_figures: Vec<Figure>,
+    valid_moves_for_selected_fig: Vec<u8>,
+    valid_mvs_tick: f32,
 }
 
 
@@ -48,7 +51,10 @@ impl<'a> Board<'a> {
             pos: Self::gen_start_pos(),
             tex_atlas,
             hovering: None,
-            selected: None
+            selected: None,
+            beaten_figures: Vec::new(),
+            valid_moves_for_selected_fig: Vec::new(),
+            valid_mvs_tick: 0.0
         }
     }
 
@@ -61,13 +67,14 @@ impl<'a> Board<'a> {
         for i in 8..=15 {
             start_pos[i] = Some(Figure::new(FigureType::Pawn, side, 11));
         }
-        //knights
-        start_pos[0] = Some(Figure::new(FigureType::Knight, side, 9));
-        start_pos[7] = Some(Figure::new(FigureType::Knight, side, 9));
 
         //rooks
-        start_pos[1] = Some(Figure::new(FigureType::Rook, side, 7));
-        start_pos[6] = Some(Figure::new(FigureType::Rook, side, 7));
+        start_pos[0] = Some(Figure::new(FigureType::Rook, side, 9));
+        start_pos[7] = Some(Figure::new(FigureType::Rook, side, 9));
+
+        //knights
+        start_pos[1] = Some(Figure::new(FigureType::Knight, side, 7));
+        start_pos[6] = Some(Figure::new(FigureType::Knight, side, 7));
 
         //bishops
         start_pos[2] = Some(Figure::new(FigureType::Bishop, side, 5));
@@ -83,13 +90,14 @@ impl<'a> Board<'a> {
         for i in 48..=55 {
             start_pos[i] = Some(Figure::new(FigureType::Pawn, side, 10));
         }
-        //knights
-        start_pos[56] = Some(Figure::new(FigureType::Knight, side, 8));
-        start_pos[63] = Some(Figure::new(FigureType::Knight, side, 8));
 
         //rooks
-        start_pos[57] = Some(Figure::new(FigureType::Rook, side, 6));
-        start_pos[62] = Some(Figure::new(FigureType::Rook, side, 6));
+        start_pos[56] = Some(Figure::new(FigureType::Rook, side, 8));
+        start_pos[63] = Some(Figure::new(FigureType::Rook, side, 8));
+
+        //knights
+        start_pos[57] = Some(Figure::new(FigureType::Knight, side, 6));
+        start_pos[62] = Some(Figure::new(FigureType::Knight, side, 6));
 
         //bishops
         start_pos[58] = Some(Figure::new(FigureType::Bishop, side, 4));
@@ -104,15 +112,33 @@ impl<'a> Board<'a> {
     }
 
 
-    pub fn draw(&self, canvas: &mut Canvas<Window>) {
+    pub fn draw(&mut self, canvas: &mut Canvas<Window>, dt: f32) {
+        //draw board
         canvas.set_draw_color(Color::RGB(250,232,168,)); // rgba(250,232,168,255)
         canvas.fill_rects(&self.white_rects).unwrap();
 
         canvas.set_draw_color(Color::RGB(20,95,75));
         canvas.fill_rects(&self.black_rects).unwrap();
 
-        //draw figures
+        //draw valid moves
+        self.valid_mvs_tick += dt * 150.0;
+        if self.valid_mvs_tick > 30.0 {
+            self.valid_mvs_tick = 30.0;
+        }
 
+
+        self.valid_moves_for_selected_fig.iter()
+            .for_each(|i| {
+                let mut size: u32 = 50;
+                let mut x = ((i % 8) as u32 * size) as i32;
+                let mut y = ((i / 8) as u32 * size) as i32;
+                let indicator_size = self.valid_mvs_tick as u32;
+                let r = Rect::from_center(Point::new(x + size as i32 /2, y + size as i32 /2), indicator_size, indicator_size);
+                canvas.set_draw_color(Color::RGBA(3, 138, 255, 128));
+                canvas.fill_rect(r).unwrap();
+            });
+
+        //draw figures
         self.pos.iter()
             .enumerate()
             .filter(|(_,f)| f.is_some())
@@ -149,6 +175,7 @@ impl<'a> Board<'a> {
             if let Some(f) = self.pos[i as usize] {
                 if f.side == Side::White {
                     self.selected = Some(i);
+                    self.valid_moves_for_selected_fig = self.valid_moves(i);
                     return Some(f)
                 }
             }
@@ -163,7 +190,10 @@ impl<'a> Board<'a> {
                     self.unselect();
                     return false
                 }
-                if self.valid_moves(selected).contains(&dst) {
+                if self.valid_moves_for_selected_fig.contains(&dst) {
+                    if let Some(dst_fig) = self.pos[dst as usize] {
+                        self.beaten_figures.push(dst_fig);
+                    }
                     self.pos[dst as usize] = self.pos[selected as usize];
                     self.pos[selected as usize] = None;
                     self.unselect();
@@ -175,17 +205,85 @@ impl<'a> Board<'a> {
     }
 
 
-    pub fn valid_moves(&self, i: u8) -> Vec<u8> {
+    pub fn valid_moves(&mut self, i: u8) -> Vec<u8> {
         let mut valid_mvs = Vec::new();
         let f = self.pos[i as usize].unwrap();
+        let pos = self.i_to_xy(i).unwrap();
+        self.valid_mvs_tick = 0.0;
+
+        let mut mv = |dir: Point| {
+            let mut new_pos = pos + dir;
+            while (new_pos.x >= 0 && new_pos.x  <= 7) && (new_pos.y >= 0 && new_pos.y  <= 7) {
+                let new_pos_i = self.xy_to_i(new_pos).unwrap();
+                if let Some(o_f) = self.pos(new_pos_i) {
+                    if o_f.side != f.side {
+                        valid_mvs.push(new_pos_i);
+                        break;
+                    } else {
+                        break;
+                    }
+                } else {
+                    valid_mvs.push(new_pos_i);
+                }
+                new_pos += dir;
+            }
+        };
+
         match f.ty {
-            FigureType::Queen => todo!(),
+            FigureType::Queen => {
+                mv(Point::new(-1,1));
+                mv(Point::new(1,1));
+                mv(Point::new(-1,-1));
+                mv(Point::new(1,-1));
+
+                mv(Point::new(1,0));
+                mv(Point::new(-1,0));
+                mv(Point::new(0,1));
+                mv(Point::new(0,-1));
+            },
             FigureType::King => todo!(),
-            FigureType::Knight => todo!(),
-            FigureType::Bishop => todo!(),
-            FigureType::Rook => todo!(),
+            FigureType::Knight => {
+                let moves = vec![
+                    Point::new(-1, 2),
+                    Point::new(1, 2),
+
+                    Point::new(-1, -2),
+                    Point::new(1, -2),
+
+                    Point::new(2, 1),
+                    Point::new(2, -1),
+
+                    Point::new(-2, 1),
+                    Point::new(-2, -1),
+                ];
+                for mv in moves {
+                    if let Some(p) = self.xy_to_i(pos + mv) {
+                        match self.pos(p) {
+                            Some(o_f) => if o_f.side != f.side {valid_mvs.push(p)},
+                            None => valid_mvs.push(p),
+                        }
+                    }
+                }
+            },
+            FigureType::Bishop => {
+                mv(Point::new(-1,1));
+                mv(Point::new(1,1));
+                mv(Point::new(-1,-1));
+                mv(Point::new(1,-1));
+            },
+            FigureType::Rook => {
+                mv(Point::new(1,0));
+                mv(Point::new(-1,0));
+                mv(Point::new(0,1));
+                mv(Point::new(0,-1));
+            },
             FigureType::Pawn => {
-                let pos = self.i_to_xy(i).unwrap();
+                /*let pawn_beating = |pos: Option<u8>, o_side: Side| {
+                    if let Some(pos) = pos && let Some(fig) = self.pos(pos) && fig.side == o_side {
+                        valid_mvs.push(pos);
+                    }
+                };*/
+
                 match f.side {
                     Side::Black => {
                         if pos.y > 6 {
@@ -204,9 +302,12 @@ impl<'a> Board<'a> {
                         if let Some(r_p) = right_pos && let Some(r_f) = self.pos(r_p) && r_f.side == Side::White {
                             valid_mvs.push(r_p);
                         }
+                        if let Some(j_p) = jump_pos && self.pos(j_p).is_none() && pos.y == 1 {
+                            valid_mvs.push(j_p);
+                        }
                     },
                     Side::White => {
-                        if pos.y > 6 {
+                        if pos.y < 0 {
                             return valid_mvs;
                         }
                         let front_pos = self.xy_to_i(pos + Point::new(0, -1));   
@@ -216,20 +317,20 @@ impl<'a> Board<'a> {
                         if let Some(f_p) = front_pos && self.pos(f_p).is_none() {
                             valid_mvs.push(f_p);
                         }
-                        if let Some(l_p) = left_pos && let Some(l_f) = self.pos(l_p) && l_f.side == Side::White {
+                        if let Some(l_p) = left_pos && let Some(l_f) = self.pos(l_p) && l_f.side == Side::Black {
                             valid_mvs.push(l_p);
                         }
-                        if let Some(r_p) = right_pos && let Some(r_f) = self.pos(r_p) && r_f.side == Side::White {
+                        if let Some(r_p) = right_pos && let Some(r_f) = self.pos(r_p) && r_f.side == Side::Black {
                             valid_mvs.push(r_p);
                         }
-                        if let Some(j_p) = jump_pos && self.pos(j_p).is_none() {
+                        if let Some(j_p) = jump_pos && self.pos(j_p).is_none() &&  pos.y == 6 {
                             valid_mvs.push(j_p);
                         }
                     },
                 }
-                valid_mvs
             },
         }
+        valid_mvs
     }
 
     fn pos(&self, i: u8) -> Option<Figure> {
@@ -247,6 +348,7 @@ impl<'a> Board<'a> {
     }
 
     pub fn unselect(&mut self) {
+        self.valid_moves_for_selected_fig.clear();
         self.selected = None;
     }
 

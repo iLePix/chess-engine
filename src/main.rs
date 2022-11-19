@@ -41,7 +41,7 @@ fn main() -> Result<(), String> {
         .expect("could not make a canvas");
     
     let mut screen_size = Vec2u::new(640, 640);
-
+    canvas.set_blend_mode(sdl2::render::BlendMode::Blend);
     canvas.set_draw_color(Color::RGB(0, 0, 0));
     canvas.clear();
     let mut event_pump = sdl_context.event_pump()?;
@@ -133,7 +133,7 @@ fn main() -> Result<(), String> {
 
 
 
-        board.draw(&mut canvas);
+        board.draw(&mut canvas, dt);
 
         if let Some(f) = board.get_selected_fig() {
             if s_tick + s_tick_increment*dt >= 255.0 {
