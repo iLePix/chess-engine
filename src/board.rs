@@ -217,8 +217,6 @@ impl<'a> Board<'a> {
                             },
                         }
                     }
-
-
                     if let Some(dst_fig) = self.pos[dst as usize] {
                         self.beaten_figures.push(dst_fig);
                     }
@@ -374,7 +372,7 @@ impl<'a> Board<'a> {
                         if let Some(r_p) = right_pos && let Some(r_f) = self.pos(r_p) && r_f.side == Side::White {
                             valid_mvs.push(r_p);
                         }
-                        if let Some(j_p) = jump_pos && self.pos(j_p).is_none() && pos.y == 1 {
+                        if let Some(j_p) = jump_pos && self.pos(j_p).is_none() && pos.y == 1 && self.pos(j_p - 8).is_none() {
                             valid_mvs.push(j_p);
                         }
                     },
@@ -395,7 +393,7 @@ impl<'a> Board<'a> {
                         if let Some(r_p) = right_pos && let Some(r_f) = self.pos(r_p) && r_f.side == Side::Black {
                             valid_mvs.push(r_p);
                         }
-                        if let Some(j_p) = jump_pos && self.pos(j_p).is_none() &&  pos.y == 6 {
+                        if let Some(j_p) = jump_pos && self.pos(j_p).is_none() &&  pos.y == 6 && self.pos(j_p + 8).is_none() {
                             valid_mvs.push(j_p);
                         }
                     },
