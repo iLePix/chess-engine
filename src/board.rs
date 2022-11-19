@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, ops::{Range, RangeInclusive}};
 
 use sdl2::{rect::{Rect, Point}, pixels::Color, render::{Canvas, Texture}, video::Window, sys::PropModePrepend};
 use vecm::vec::Vec2i;
@@ -22,6 +22,8 @@ pub struct Board<'a> {
     beaten_figures: Vec<Figure>,
     valid_moves_for_selected_fig: Vec<u8>,
     valid_mvs_tick: f32,
+    white_castling_possible: bool,
+    black_castling_possible: bool,
 }
 
 
@@ -54,7 +56,9 @@ impl<'a> Board<'a> {
             selected: None,
             beaten_figures: Vec::new(),
             valid_moves_for_selected_fig: Vec::new(),
-            valid_mvs_tick: 0.0
+            valid_mvs_tick: 0.0,
+            white_castling_possible: true,
+            black_castling_possible: true,
         }
     }
 
@@ -190,7 +194,31 @@ impl<'a> Board<'a> {
                     self.unselect();
                     return false
                 }
+                //dont allow for any future castling if king or tower of specific side moved
+
                 if self.valid_moves_for_selected_fig.contains(&dst) {
+                    //detect castling
+                    let selected_figure = self.pos(selected).unwrap();
+                    if selected_figure.ty == FigureType::King {
+                        match selected_figure.side {
+                            Side::Black => {
+                                if self.black_castling_possible && dst == 2 {
+                                    self.pos[3] = self.pos[0];
+                                    self.pos[0] = None;
+                                }  
+                                self.black_castling_possible = false;
+                            },
+                            Side::White => {
+                                if self.white_castling_possible && dst == 58 {
+                                    self.pos[59] = self.pos[56];
+                                    self.pos[56] = None;
+                                }
+                                self.white_castling_possible = false;
+                            },
+                        }
+                    }
+
+
                     if let Some(dst_fig) = self.pos[dst as usize] {
                         self.beaten_figures.push(dst_fig);
                     }
@@ -241,7 +269,51 @@ impl<'a> Board<'a> {
                 mv(Point::new(0,1));
                 mv(Point::new(0,-1));
             },
-            FigureType::King => todo!(),
+            FigureType::King => {
+                //regular
+                for x in -1..=1 {
+                    for y in -1..=1 {
+                        if x == 0 && y == 0 {
+                            continue;
+                        }
+                        println!("Checking for {} {}", x, y);
+                        if let Some(new_pos_i) = self.xy_to_i(pos + Point::new(x, y)) {
+                            if let Some(o_f) = self.pos(new_pos_i) {
+                                if o_f.side == f.side {
+                                    continue;
+                                }
+                            }
+                            valid_mvs.push(new_pos_i);
+                        }
+                    }
+                }
+                //edge-cases
+                //castling
+
+                let castling_space_is_empty = |space: RangeInclusive<u8>| -> bool {
+                    for o_f_i in space {
+                        if self.pos(o_f_i).is_some() {
+                            return false
+                        }
+                    }
+                    return true
+                };
+
+                match f.side {
+                    Side::Black => {
+                        if self.black_castling_possible && i == 4 && castling_space_is_empty(RangeInclusive::new(1, 3)) {
+                            valid_mvs.push(2);
+                        }
+                    },
+                    Side::White => {
+                        println!("Checking for castling {}, {}, {}", (self.white_castling_possible), (i == 60), (castling_space_is_empty(RangeInclusive::new(57, 59))));
+                        if self.white_castling_possible && i == 60 && castling_space_is_empty(RangeInclusive::new(57, 59)) {
+                            valid_mvs.push(58);
+                        }
+                    },
+                }
+
+            },
             FigureType::Knight => {
                 let moves = vec![
                     Point::new(-1, 2),
