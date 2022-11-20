@@ -5,7 +5,7 @@ pub mod atlas;
 
 use atlas::TextureAtlas;
 use board::Board;
-use figures::Figure;
+use figures::{Figure, Side};
 use input::InputHandler;
 use sdl2::image::{LoadTexture, InitFlag};
 use sdl2::pixels::Color;
@@ -58,6 +58,8 @@ fn main() -> Result<(), String> {
 
     let mut last_frame_time = Instant::now();
 
+    let mut turn = Side::White;
+
     'running: loop {
         let current_frame_time = Instant::now();
         let dt = (current_frame_time - last_frame_time).as_secs_f32();
@@ -109,23 +111,15 @@ fn main() -> Result<(), String> {
         }
 
 
-        /* 
-        if inputs.left_click {
-            if selected_fig.is_none() {
-                selected_fig = board.select(i);
-            } else {
-                if board.move_figure(i) {
-                    selected_fig = None;
-                }
-            }
-        }*/
-
         if inputs.left_click {
             if board.selected.is_none() {
-                board.select(i);
+                board.select(i, turn);
             } else {
                 if board.move_figure(i) {
-                    println!("was valid");
+                    turn = match turn {
+                        Side::Black => Side::White,
+                        Side::White => Side::Black,
+                    }
                 }
             }
         }
@@ -133,7 +127,7 @@ fn main() -> Result<(), String> {
 
 
 
-        board.draw(&mut canvas, dt);
+        board.draw(&mut canvas, turn, dt);
 
         if let Some(f) = board.get_selected_fig() {
             if s_tick + s_tick_increment*dt >= 255.0 {
@@ -167,11 +161,5 @@ fn main() -> Result<(), String> {
 
 
 fn parabola(x: i32) -> f32 {
-    -1.0 * pow(0.125 * x as f32 - 16.0) + 256.0
+    -1.0 * (0.125 * x as f32 - 16.0).powi(2) + 256.0
 }
-
-fn pow(x: f32) -> f32 {
-    x * x
-}
-
-

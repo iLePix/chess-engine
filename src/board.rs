@@ -24,6 +24,8 @@ pub struct Board<'a> {
     valid_mvs_tick: f32,
     white_castling_possible: bool,
     black_castling_possible: bool,
+    last_move: Option<(u8, u8)>,
+    last_move_tick: f32,
 }
 
 
@@ -59,6 +61,8 @@ impl<'a> Board<'a> {
             valid_mvs_tick: 0.0,
             white_castling_possible: true,
             black_castling_possible: true,
+            last_move: None,
+            last_move_tick: 0.0
         }
     }
 
@@ -116,7 +120,7 @@ impl<'a> Board<'a> {
     }
 
 
-    pub fn draw(&mut self, canvas: &mut Canvas<Window>, dt: f32) {
+    pub fn draw(&mut self, canvas: &mut Canvas<Window>, turn: Side, dt: f32) {
         //draw board
         canvas.set_draw_color(Color::RGB(250,232,168,)); // rgba(250,232,168,255)
         canvas.fill_rects(&self.white_rects).unwrap();
@@ -124,12 +128,34 @@ impl<'a> Board<'a> {
         canvas.set_draw_color(Color::RGB(20,95,75));
         canvas.fill_rects(&self.black_rects).unwrap();
 
+
+        //draw last move
+        if let Some(last_move) = self.last_move {
+            self.last_move_tick += dt * 100.0;
+            if self.last_move_tick > 50.0 {
+                self.last_move_tick = 50.0;
+            }
+
+            let mut draw_rect = |i: u8| {
+                let indicator_size = self.last_move_tick as u32;
+                let size = 50;
+                let x = ((i % 8) as u32 * size) as i32;
+                let y = ((i / 8) as u32 * size) as i32;
+                let r = Rect::from_center(Point::new(x + size as i32 /2, y + size as i32 /2), indicator_size, indicator_size);
+                canvas.set_draw_color(Color::RGBA(255,255, 0, 128));
+                canvas.fill_rect(r).unwrap()
+            };
+            draw_rect(last_move.0);
+            draw_rect(last_move.1);
+        }
+
+
+
         //draw valid moves
-        self.valid_mvs_tick += dt * 150.0;
+        self.valid_mvs_tick += dt * 100.0;
         if self.valid_mvs_tick > 30.0 {
             self.valid_mvs_tick = 30.0;
         }
-
 
         self.valid_moves_for_selected_fig.iter()
             .for_each(|i| {
@@ -147,9 +173,9 @@ impl<'a> Board<'a> {
             let size: u32 = 50;
             let x = ((selected % 8) as u32 * size) as i32;
             let y = ((selected / 8) as u32 * size) as i32;
-            let indicator_size = self.valid_mvs_tick as u32;
+            let indicator_size = (self.valid_mvs_tick * 0.75) as u32;
             let s_r = Rect::from_center(Point::new(x + size as i32 /2, y + size as i32 /2), indicator_size, indicator_size);
-            canvas.set_draw_color(Color::RGBA(255, 153, 128, 200));
+            canvas.set_draw_color(Color::RGBA(255, 123, 98, 200));
             canvas.fill_rect(s_r).unwrap();
         }
 
@@ -163,7 +189,7 @@ impl<'a> Board<'a> {
                 let mut x = ((i % 8) * size) as i32;
                 let mut y = ((i / 8) * size) as i32;
                 let f = f.unwrap();
-                if f.side == Side::White {
+                if f.side == turn {
                     if let Some(selected) = self.selected && selected == i as u8 {
                         return
                     }
@@ -180,16 +206,16 @@ impl<'a> Board<'a> {
             })
     }
 
-    pub fn select(&mut self, i: u8) -> Option<Figure> { 
+    pub fn select(&mut self, i: u8, side: Side) -> Option<Figure> { 
         if let Some(selected) = self.selected {
             if i == selected { 
-                self.selected = None;
+                self.unselect();
                 return None;
             }
         }
         if i < 64 {
             if let Some(f) = self.pos[i as usize] {
-                if f.side == Side::White {
+                if f.side == side {
                     self.selected = Some(i);
                     self.valid_moves_for_selected_fig = self.valid_moves(i);
                     return Some(f)
@@ -211,29 +237,44 @@ impl<'a> Board<'a> {
                 if self.valid_moves_for_selected_fig.contains(&dst) {
                     //detect castling
                     let selected_figure = self.pos(selected).unwrap();
-                    if selected_figure.ty == FigureType::King {
-                        match selected_figure.side {
-                            Side::Black => {
-                                if self.black_castling_possible && dst == 2 {
-                                    self.pos[3] = self.pos[0];
-                                    self.pos[0] = None;
-                                }  
-                                self.black_castling_possible = false;
-                            },
-                            Side::White => {
-                                if self.white_castling_possible && dst == 58 {
-                                    self.pos[59] = self.pos[56];
-                                    self.pos[56] = None;
-                                }
-                                self.white_castling_possible = false;
-                            },
-                        }
+
+                    match selected_figure.ty {
+                        FigureType::King => {
+                            match selected_figure.side {
+                                Side::Black => {
+                                    if self.black_castling_possible && dst == 2 {
+                                        self.pos[3] = self.pos[0];
+                                        self.pos[0] = None;
+                                    }  
+                                    self.black_castling_possible = false;
+                                },
+                                Side::White => {
+                                    if self.white_castling_possible && dst == 58 {
+                                        self.pos[59] = self.pos[56];
+                                        self.pos[56] = None;
+                                    }
+                                    self.white_castling_possible = false;
+                                },
+                            }
+                        },
+                        FigureType::Rook => {
+                            match selected_figure.side {
+                                Side::Black => if self.black_castling_possible {
+                                    self.black_castling_possible = !(selected == 0);
+                                },
+                                Side::White => if self.white_castling_possible {
+                                    self.white_castling_possible = !(selected == 56);
+                                },
+                            }
+                        },
+                        _ => {},
                     }
                     if let Some(dst_fig) = self.pos[dst as usize] {
                         self.beaten_figures.push(dst_fig);
                     }
                     self.pos[dst as usize] = self.pos[selected as usize];
                     self.pos[selected as usize] = None;
+                    self.last_move = Some((selected, dst));
                     self.unselect();
                     return true
                 }
@@ -283,10 +324,6 @@ impl<'a> Board<'a> {
                 //regular
                 for x in -1..=1 {
                     for y in -1..=1 {
-                        if x == 0 && y == 0 {
-                            continue;
-                        }
-                        println!("Checking for {} {}", x, y);
                         if let Some(new_pos_i) = self.xy_to_i(pos + Point::new(x, y)) {
                             if let Some(o_f) = self.pos(new_pos_i) {
                                 if o_f.side == f.side {
@@ -316,7 +353,6 @@ impl<'a> Board<'a> {
                         }
                     },
                     Side::White => {
-                        println!("Checking for castling {}, {}, {}", (self.white_castling_possible), (i == 60), (castling_space_is_empty(RangeInclusive::new(57, 59))));
                         if self.white_castling_possible && i == 60 && castling_space_is_empty(RangeInclusive::new(57, 59)) {
                             valid_mvs.push(58);
                         }
