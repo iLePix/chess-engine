@@ -22,8 +22,9 @@ pub struct Board<'a> {
     beaten_figures: Vec<Figure>,
     valid_moves_for_selected_fig: Vec<u8>,
     valid_mvs_tick: f32,
-    white_castling_possible: bool,
-    black_castling_possible: bool,
+    //0 = left, 1 = right
+    white_castling_possible: (bool, bool),
+    black_castling_possible: (bool, bool),
     last_move: Option<(u8, u8)>,
     last_move_tick: f32,
 }
@@ -59,8 +60,8 @@ impl<'a> Board<'a> {
             beaten_figures: Vec::new(),
             valid_moves_for_selected_fig: Vec::new(),
             valid_mvs_tick: 0.0,
-            white_castling_possible: true,
-            black_castling_possible: true,
+            white_castling_possible: (true, true),
+            black_castling_possible: (true, true),
             last_move: None,
             last_move_tick: 0.0
         }
@@ -242,28 +243,44 @@ impl<'a> Board<'a> {
                         FigureType::King => {
                             match selected_figure.side {
                                 Side::Black => {
-                                    if self.black_castling_possible && dst == 2 {
+                                    if self.black_castling_possible.0 && dst == 2 {
                                         self.pos[3] = self.pos[0];
                                         self.pos[0] = None;
                                     }  
-                                    self.black_castling_possible = false;
+                                    if self.black_castling_possible.1 && dst == 6 {
+                                        self.pos[5] = self.pos[7];
+                                        self.pos[5] = None;
+                                    }  
+                                    self.black_castling_possible = (false, false);
                                 },
                                 Side::White => {
-                                    if self.white_castling_possible && dst == 58 {
+                                    if self.white_castling_possible.0 && dst == 58 {
                                         self.pos[59] = self.pos[56];
                                         self.pos[56] = None;
                                     }
-                                    self.white_castling_possible = false;
+                                    if self.white_castling_possible.1 && dst == 62 {
+                                        self.pos[61] = self.pos[63];
+                                        self.pos[63] = None;
+                                    }
+                                    self.white_castling_possible = (false, false);
                                 },
                             }
                         },
                         FigureType::Rook => {
                             match selected_figure.side {
-                                Side::Black => if self.black_castling_possible {
-                                    self.black_castling_possible = !(selected == 0);
+                                Side::Black => {
+                                    match selected {
+                                        0 => self.black_castling_possible.0 = false,
+                                        7 => self.black_castling_possible.1 = false,
+                                        _ => {}
+                                    }
                                 },
-                                Side::White => if self.white_castling_possible {
-                                    self.white_castling_possible = !(selected == 56);
+                                Side::White => {
+                                    match selected {
+                                        56 => self.white_castling_possible.0 = false,
+                                        64 => self.white_castling_possible.1 = false,
+                                        _ => {}
+                                }
                                 },
                             }
                         },
@@ -290,35 +307,42 @@ impl<'a> Board<'a> {
         let pos = self.i_to_xy(i).unwrap();
         self.valid_mvs_tick = 0.0;
 
-        let mut mv = |dir: Point| {
+        let mut mv = |dir: Point, mvs: &mut Vec<u8>| {
             let mut new_pos = pos + dir;
             while (new_pos.x >= 0 && new_pos.x  <= 7) && (new_pos.y >= 0 && new_pos.y  <= 7) {
                 let new_pos_i = self.xy_to_i(new_pos).unwrap();
                 if let Some(o_f) = self.pos(new_pos_i) {
                     if o_f.side != f.side {
-                        valid_mvs.push(new_pos_i);
+                        mvs.push(new_pos_i);
                         break;
                     } else {
                         break;
                     }
                 } else {
-                    valid_mvs.push(new_pos_i);
+                    mvs.push(new_pos_i);
                 }
                 new_pos += dir;
             }
         };
 
+        let mut rook = |valid_moves: &mut Vec<u8>| {
+                mv(Point::new(1,0), valid_moves);
+                mv(Point::new(-1,0), valid_moves);
+                mv(Point::new(0,1), valid_moves);
+                mv(Point::new(0,-1), valid_moves);
+        };
+
+        let mut bishop = |valid_moves: &mut Vec<u8>| {
+            mv(Point::new(1,1), valid_moves);
+            mv(Point::new(-1,1), valid_moves);
+            mv(Point::new(1,-1), valid_moves);
+            mv(Point::new(-1,-1), valid_moves);
+    };
+
         match f.ty {
             FigureType::Queen => {
-                mv(Point::new(-1,1));
-                mv(Point::new(1,1));
-                mv(Point::new(-1,-1));
-                mv(Point::new(1,-1));
-
-                mv(Point::new(1,0));
-                mv(Point::new(-1,0));
-                mv(Point::new(0,1));
-                mv(Point::new(0,-1));
+                bishop(&mut valid_mvs);
+                rook(&mut valid_mvs);
             },
             FigureType::King => {
                 //regular
@@ -337,7 +361,7 @@ impl<'a> Board<'a> {
                 //edge-cases
                 //castling
 
-                let castling_space_is_empty = |space: RangeInclusive<u8>| -> bool {
+                let x_space_is_empty = |space: RangeInclusive<u8>| -> bool {
                     for o_f_i in space {
                         if self.pos(o_f_i).is_some() {
                             return false
@@ -348,20 +372,32 @@ impl<'a> Board<'a> {
 
                 match f.side {
                     Side::Black => {
-                        if self.black_castling_possible && i == 4 && castling_space_is_empty(RangeInclusive::new(1, 3)) {
-                            valid_mvs.push(2);
+                        if i == 4 {
+                            if self.black_castling_possible.0  && x_space_is_empty(RangeInclusive::new(1, 3)){
+                                valid_mvs.push(2);
+                            }
+
+                            if self.black_castling_possible.1  && x_space_is_empty(RangeInclusive::new(5, 6)){
+                                valid_mvs.push(6);
+                            }
                         }
                     },
                     Side::White => {
-                        if self.white_castling_possible && i == 60 && castling_space_is_empty(RangeInclusive::new(57, 59)) {
-                            valid_mvs.push(58);
+                        if i == 60 {
+                            if self.white_castling_possible.0  && x_space_is_empty(RangeInclusive::new(57, 59)){
+                                valid_mvs.push(58);
+                            }
+
+                            if self.white_castling_possible.1  && x_space_is_empty(RangeInclusive::new(61, 62)){
+                                valid_mvs.push(62);
+                            }
                         }
                     },
                 }
 
             },
             FigureType::Knight => {
-                let moves = vec![
+                let moves = [
                     Point::new(-1, 2),
                     Point::new(1, 2),
 
@@ -384,16 +420,10 @@ impl<'a> Board<'a> {
                 }
             },
             FigureType::Bishop => {
-                mv(Point::new(-1,1));
-                mv(Point::new(1,1));
-                mv(Point::new(-1,-1));
-                mv(Point::new(1,-1));
+                bishop(&mut valid_mvs);
             },
             FigureType::Rook => {
-                mv(Point::new(1,0));
-                mv(Point::new(-1,0));
-                mv(Point::new(0,1));
-                mv(Point::new(0,-1));
+                rook(&mut valid_mvs);
             },
             FigureType::Pawn => {
                 /*let pawn_beating = |pos: Option<u8>, o_side: Side| {

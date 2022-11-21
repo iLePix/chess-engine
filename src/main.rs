@@ -114,12 +114,10 @@ fn main() -> Result<(), String> {
         if inputs.left_click {
             if board.selected.is_none() {
                 board.select(i, turn);
-            } else {
-                if board.move_figure(i) {
-                    turn = match turn {
-                        Side::Black => Side::White,
-                        Side::White => Side::Black,
-                    }
+            } else if board.move_figure(i) {
+                turn = match turn {
+                    Side::Black => Side::White,
+                    Side::White => Side::Black,
                 }
             }
         }
