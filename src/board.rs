@@ -27,6 +27,8 @@ pub struct Board<'a> {
     black_castling_possible: (bool, bool),
     last_move: Option<(u8, u8)>,
     last_move_tick: f32,
+    //0 = left, 1 = right
+    check: (bool, bool)
 }
 
 
@@ -63,7 +65,8 @@ impl<'a> Board<'a> {
             white_castling_possible: (true, true),
             black_castling_possible: (true, true),
             last_move: None,
-            last_move_tick: 0.0
+            last_move_tick: 0.0,
+            check: (false, false)
         }
     }
 
@@ -151,7 +154,6 @@ impl<'a> Board<'a> {
         }
 
 
-
         //draw valid moves
         self.valid_mvs_tick += dt * 100.0;
         if self.valid_mvs_tick > 30.0 {
@@ -200,9 +202,19 @@ impl<'a> Board<'a> {
                         size += 10;
                     }
                 }
+                let dst = Rect::new(x,y, size as u32,size as u32);
+                //draw check indicator
+                if self.check.0  && f.side == Side::White && f.ty == FigureType::King {
+                    canvas.set_draw_color(Color::RGBA(200, 0, 0, 255));
+                    canvas.fill_rect(dst).unwrap();
+                }
+                if self.check.1  && f.side == Side::Black && f.ty == FigureType::King {
+                    canvas.set_draw_color(Color::RGBA(200, 0, 0, 255));
+                    canvas.fill_rect(dst).unwrap();
+                }
+
                 let src = self.tex_atlas.figure_atlas_cords.get(&f.tex_id)
                     .unwrap_or_else(|| panic!("Created figure with wrong index {}", f.tex_id));
-                let dst = Rect::new(x,y, size as u32,size as u32);
                 canvas.copy(self.tex_atlas.pieces_texture, *src, dst).unwrap();
             })
     }
@@ -218,7 +230,7 @@ impl<'a> Board<'a> {
             if let Some(f) = self.pos[i as usize] {
                 if f.side == side {
                     self.selected = Some(i);
-                    self.valid_moves_for_selected_fig = self.valid_moves(i);
+                    self.valid_moves_for_selected_fig = self.valid_moves(i, self.pos);
                     return Some(f)
                 }
             }
@@ -234,6 +246,7 @@ impl<'a> Board<'a> {
                     return false
                 }
                 //dont allow for any future castling if king or tower of specific side moved
+                let mut new_pos = self.pos.clone();
 
                 if self.valid_moves_for_selected_fig.contains(&dst) {
                     //detect castling
@@ -244,23 +257,23 @@ impl<'a> Board<'a> {
                             match selected_figure.side {
                                 Side::Black => {
                                     if self.black_castling_possible.0 && dst == 2 {
-                                        self.pos[3] = self.pos[0];
-                                        self.pos[0] = None;
+                                        new_pos[3] = new_pos[0];
+                                        new_pos[0] = None;
                                     }  
                                     if self.black_castling_possible.1 && dst == 6 {
-                                        self.pos[5] = self.pos[7];
-                                        self.pos[5] = None;
+                                        new_pos[5] = new_pos[7];
+                                        new_pos[5] = None;
                                     }  
                                     self.black_castling_possible = (false, false);
                                 },
                                 Side::White => {
                                     if self.white_castling_possible.0 && dst == 58 {
-                                        self.pos[59] = self.pos[56];
-                                        self.pos[56] = None;
+                                        new_pos[59] = new_pos[56];
+                                        new_pos[56] = None;
                                     }
                                     if self.white_castling_possible.1 && dst == 62 {
-                                        self.pos[61] = self.pos[63];
-                                        self.pos[63] = None;
+                                        new_pos[61] = new_pos[63];
+                                        new_pos[63] = None;
                                     }
                                     self.white_castling_possible = (false, false);
                                 },
@@ -288,8 +301,8 @@ impl<'a> Board<'a> {
                         FigureType::Pawn => {
                             if self.pos[dst as usize].is_none() && let Some(selected_pos) = self.i_to_xy(selected) && selected_pos.x != self.i_to_xy(dst).unwrap().x {
                                 match selected_figure.side {
-                                    Side::Black => self.pos[(dst - 8) as usize] = None,
-                                    Side::White => self.pos[(dst + 8) as usize] = None,
+                                    Side::Black => new_pos[(dst - 8) as usize] = None,
+                                    Side::White => new_pos[(dst + 8) as usize] = None,
                                 }
                             }
                             //if dst figure == None && pawn moves diagonal = prev.y != dst.y
@@ -297,13 +310,28 @@ impl<'a> Board<'a> {
                         _ => {},
                     }
 
-                    if let Some(dst_fig) = self.pos[dst as usize] {
-                        self.beaten_figures.push(dst_fig);
-                    }
-                    self.pos[dst as usize] = self.pos[selected as usize];
-                    self.pos[selected as usize] = None;
-                    self.last_move = Some((selected, dst));
+                    new_pos[dst as usize] = new_pos[selected as usize];
+                    new_pos[selected as usize] = None;
                     self.unselect();
+
+                    let check = self.is_check(new_pos);
+                    
+                    let self_check = match selected_figure.side {
+                        Side::Black => check.1,
+                        Side::White => check.0,
+                    };
+
+                    if !self_check {
+                        if let Some(dst_fig) = self.pos[dst as usize] {
+                            self.beaten_figures.push(dst_fig);
+                        }
+                        self.last_move = Some((selected, dst));
+                        self.pos = new_pos;
+                        self.check = check;
+                    } else {
+                        return false
+                    }
+
                     return true
                 }
             }
@@ -312,17 +340,26 @@ impl<'a> Board<'a> {
     }
 
 
-    pub fn valid_moves(&mut self, i: u8) -> Vec<u8> {
+    pub fn valid_moves(&mut self, i: u8, board: [Option<Figure>; 64]) -> Vec<u8> {
         let mut valid_mvs = Vec::new();
-        let f = self.pos[i as usize].unwrap();
-        let pos = self.i_to_xy(i).unwrap();
+        let f = board[i as usize].unwrap();
+        let f_pos = self.i_to_xy(i).unwrap();
         self.valid_mvs_tick = 0.0;
 
+        let p = |i: u8| -> Option<Figure> {
+            if i < 64 {
+                return board[i as usize];
+            }
+            None
+        };
+
+
+
         let mut mv = |dir: Point, mvs: &mut Vec<u8>| {
-            let mut new_pos = pos + dir;
+            let mut new_pos = f_pos + dir;
             while (new_pos.x >= 0 && new_pos.x  <= 7) && (new_pos.y >= 0 && new_pos.y  <= 7) {
                 let new_pos_i = self.xy_to_i(new_pos).unwrap();
-                if let Some(o_f) = self.pos(new_pos_i) {
+                if let Some(o_f) = p(new_pos_i) {
                     if o_f.side != f.side {
                         mvs.push(new_pos_i);
                         break;
@@ -359,8 +396,8 @@ impl<'a> Board<'a> {
                 //regular
                 for x in -1..=1 {
                     for y in -1..=1 {
-                        if let Some(new_pos_i) = self.xy_to_i(pos + Point::new(x, y)) {
-                            if let Some(o_f) = self.pos(new_pos_i) {
+                        if let Some(new_pos_i) = self.xy_to_i(f_pos + Point::new(x, y)) {
+                            if let Some(o_f) = p(new_pos_i) {
                                 if o_f.side == f.side {
                                     continue;
                                 }
@@ -374,7 +411,7 @@ impl<'a> Board<'a> {
 
                 let x_space_is_empty = |space: RangeInclusive<u8>| -> bool {
                     for o_f_i in space {
-                        if self.pos(o_f_i).is_some() {
+                        if p(o_f_i).is_some() {
                             return false
                         }
                     }
@@ -422,10 +459,10 @@ impl<'a> Board<'a> {
                     Point::new(-2, -1),
                 ];
                 for mv in moves {
-                    if let Some(p) = self.xy_to_i(pos + mv) {
-                        match self.pos(p) {
-                            Some(o_f) => if o_f.side != f.side {valid_mvs.push(p)},
-                            None => valid_mvs.push(p),
+                    if let Some(f_pos) = self.xy_to_i(f_pos + mv) {
+                        match p(f_pos) {
+                            Some(o_f) => if o_f.side != f.side {valid_mvs.push(f_pos)},
+                            None => valid_mvs.push(f_pos),
                         }
                     }
                 }
@@ -448,22 +485,22 @@ impl<'a> Board<'a> {
                             let lm_pos = self.i_to_xy(last_move.1).unwrap();
                             match f.side {
                                 Side::Black => {
-                                    if pos.y == 4 && lm_pos.y == 4 {
-                                        if lm_pos.x == pos.x - 1 && self.pos(i - 1).unwrap().ty == FigureType::Pawn {
+                                    if f_pos.y == 4 && lm_pos.y == 4 {
+                                        if lm_pos.x == f_pos.x - 1 && p(i - 1).unwrap().ty == FigureType::Pawn {
                                             valid_mvs.push(i+7);
                                         }
-                                        if lm_pos.x == pos.x + 1 && self.pos(i + 1).unwrap().ty == FigureType::Pawn {
+                                        if lm_pos.x == f_pos.x + 1 && p(i + 1).unwrap().ty == FigureType::Pawn {
                                             valid_mvs.push(i+9);
                                         }
                                     }
                                 },
                                 Side::White => {
-                                    if pos.y == 3 && lm_pos.y == 3 {
-                                        println!("Right height for en passant, oc {} {}", lm_pos.x == pos.x - 1, self.pos(i - 1).unwrap().ty == FigureType::Pawn );
-                                        if lm_pos.x == pos.x - 1 && self.pos(i - 1).unwrap().ty == FigureType::Pawn {
+                                    if f_pos.y == 3 && lm_pos.y == 3 {
+                                        println!("Last move next to pawn selected");
+                                        if lm_pos.x == f_pos.x - 1 && p(i - 1).unwrap().ty == FigureType::Pawn {
                                             valid_mvs.push(i - 9);
                                         }
-                                        if lm_pos.x == pos.x + 1 && self.pos(i + 1).unwrap().ty == FigureType::Pawn {
+                                        if lm_pos.x == f_pos.x + 1 && p(i + 1).unwrap().ty == FigureType::Pawn {
                                             valid_mvs.push(i - 7);
                                         }
                                     }
@@ -474,44 +511,44 @@ impl<'a> Board<'a> {
                 check_en_passant();
                 match f.side {
                     Side::Black => {
-                        if pos.y > 6 {
+                        if f_pos.y > 6 {
                             return valid_mvs;
                         }
-                        let front_pos = self.xy_to_i(pos + Point::new(0, 1));   
-                        let left_pos = self.xy_to_i(pos + Point::new(-1, 1));
-                        let right_pos = self.xy_to_i(pos + Point::new(1, 1));
-                        let jump_pos = self.xy_to_i(pos + Point::new(0, 2));
-                        if let Some(f_p) = front_pos && self.pos(f_p).is_none() {
+                        let front_pos = self.xy_to_i(f_pos + Point::new(0, 1));   
+                        let left_pos = self.xy_to_i(f_pos + Point::new(-1, 1));
+                        let right_pos = self.xy_to_i(f_pos + Point::new(1, 1));
+                        let jump_pos = self.xy_to_i(f_pos + Point::new(0, 2));
+                        if let Some(f_p) = front_pos && p(f_p).is_none() {
                             valid_mvs.push(f_p);
                         }
-                        if let Some(l_p) = left_pos && let Some(l_f) = self.pos(l_p) && l_f.side == Side::White {
+                        if let Some(l_p) = left_pos && let Some(l_f) = p(l_p) && l_f.side == Side::White {
                             valid_mvs.push(l_p);
                         }
-                        if let Some(r_p) = right_pos && let Some(r_f) = self.pos(r_p) && r_f.side == Side::White {
+                        if let Some(r_p) = right_pos && let Some(r_f) = p(r_p) && r_f.side == Side::White {
                             valid_mvs.push(r_p);
                         }
-                        if let Some(j_p) = jump_pos && self.pos(j_p).is_none() && pos.y == 1 && self.pos(j_p - 8).is_none() {
+                        if let Some(j_p) = jump_pos && p(j_p).is_none() && f_pos.y == 1 && p(j_p - 8).is_none() {
                             valid_mvs.push(j_p);
                         }
                     },
                     Side::White => {
-                        if pos.y < 0 {
+                        if f_pos.y < 0 {
                             return valid_mvs;
                         }
-                        let front_pos = self.xy_to_i(pos + Point::new(0, -1));   
-                        let left_pos = self.xy_to_i(pos + Point::new(-1, -1));
-                        let right_pos = self.xy_to_i(pos + Point::new(1, -1));
-                        let jump_pos = self.xy_to_i(pos + Point::new(0, -2));
-                        if let Some(f_p) = front_pos && self.pos(f_p).is_none() {
+                        let front_pos = self.xy_to_i(f_pos + Point::new(0, -1));   
+                        let left_pos = self.xy_to_i(f_pos + Point::new(-1, -1));
+                        let right_pos = self.xy_to_i(f_pos + Point::new(1, -1));
+                        let jump_pos = self.xy_to_i(f_pos + Point::new(0, -2));
+                        if let Some(f_p) = front_pos && p(f_p).is_none() {
                             valid_mvs.push(f_p);
                         }
-                        if let Some(l_p) = left_pos && let Some(l_f) = self.pos(l_p) && l_f.side == Side::Black {
+                        if let Some(l_p) = left_pos && let Some(l_f) = p(l_p) && l_f.side == Side::Black {
                             valid_mvs.push(l_p);
                         }
-                        if let Some(r_p) = right_pos && let Some(r_f) = self.pos(r_p) && r_f.side == Side::Black {
+                        if let Some(r_p) = right_pos && let Some(r_f) = p(r_p) && r_f.side == Side::Black {
                             valid_mvs.push(r_p);
                         }
-                        if let Some(j_p) = jump_pos && self.pos(j_p).is_none() &&  pos.y == 6 && self.pos(j_p + 8).is_none() {
+                        if let Some(j_p) = jump_pos && p(j_p).is_none() &&  f_pos.y == 6 && p(j_p + 8).is_none() {
                             valid_mvs.push(j_p);
                         }
                     },
@@ -519,6 +556,31 @@ impl<'a> Board<'a> {
             },
         }
         valid_mvs
+    }
+
+
+    // 0 = Side::White, 1 = Side::Black
+    fn is_check(&mut self, pos: [Option<Figure>; 64]) -> (bool, bool) {
+        let figures: Vec<(usize, Figure)> = pos.to_vec()
+            .into_iter()
+            .enumerate()
+            .filter_map(|(i, f)| {
+                f.map(|f| (i,f))
+            })
+            .collect();
+        
+        let kings:Vec<(usize, Figure)> = figures.clone().into_iter().filter(|(_, f)| f.ty == FigureType::King).collect();
+        let white_king = kings.clone().into_iter().find(|f| f.1.side == Side::White).expect("White has no king!");
+        let black_king = kings.into_iter().find(|f| f.1.side == Side::Black).expect("Black has no king!");
+        
+        let mut check = (false, false);
+        figures.iter().for_each(|(i, f)| {
+            match f.side {
+                Side::Black => if self.valid_moves(*i as u8, pos).contains(&(white_king.0 as u8)) {check.0 = true},
+                Side::White => if self.valid_moves(*i as u8, pos).contains(&(black_king.0 as u8)) {check.1 = true},
+            }
+        });
+        check
     }
 
     fn pos(&self, i: u8) -> Option<Figure> {
