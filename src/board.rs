@@ -284,8 +284,19 @@ impl<'a> Board<'a> {
                                 },
                             }
                         },
+                        //detect en passant
+                        FigureType::Pawn => {
+                            if self.pos[dst as usize].is_none() && let Some(selected_pos) = self.i_to_xy(selected) && selected_pos.x != self.i_to_xy(dst).unwrap().x {
+                                match selected_figure.side {
+                                    Side::Black => self.pos[(dst - 8) as usize] = None,
+                                    Side::White => self.pos[(dst + 8) as usize] = None,
+                                }
+                            }
+                            //if dst figure == None && pawn moves diagonal = prev.y != dst.y
+                        },
                         _ => {},
                     }
+
                     if let Some(dst_fig) = self.pos[dst as usize] {
                         self.beaten_figures.push(dst_fig);
                     }
@@ -432,6 +443,35 @@ impl<'a> Board<'a> {
                     }
                 };*/
 
+                let mut check_en_passant = || {
+                        if let Some(last_move) = self.last_move {
+                            let lm_pos = self.i_to_xy(last_move.1).unwrap();
+                            match f.side {
+                                Side::Black => {
+                                    if pos.y == 4 && lm_pos.y == 4 {
+                                        if lm_pos.x == pos.x - 1 && self.pos(i - 1).unwrap().ty == FigureType::Pawn {
+                                            valid_mvs.push(i+7);
+                                        }
+                                        if lm_pos.x == pos.x + 1 && self.pos(i + 1).unwrap().ty == FigureType::Pawn {
+                                            valid_mvs.push(i+9);
+                                        }
+                                    }
+                                },
+                                Side::White => {
+                                    if pos.y == 3 && lm_pos.y == 3 {
+                                        println!("Right height for en passant, oc {} {}", lm_pos.x == pos.x - 1, self.pos(i - 1).unwrap().ty == FigureType::Pawn );
+                                        if lm_pos.x == pos.x - 1 && self.pos(i - 1).unwrap().ty == FigureType::Pawn {
+                                            valid_mvs.push(i - 9);
+                                        }
+                                        if lm_pos.x == pos.x + 1 && self.pos(i + 1).unwrap().ty == FigureType::Pawn {
+                                            valid_mvs.push(i - 7);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    };        
+                check_en_passant();
                 match f.side {
                     Side::Black => {
                         if pos.y > 6 {
