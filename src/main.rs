@@ -1,20 +1,17 @@
-pub mod figures;
+pub mod pieces;
 pub mod board;
 pub mod macros;
 pub mod atlas;
 
 use atlas::TextureAtlas;
-use board::Board;
-use figures::{Figure, Side};
+use board::{BoardRenderer, Renderer};
+use pieces::{Piece, Side};
 use input::InputHandler;
 use sdl2::image::{LoadTexture, InitFlag};
-use sdl2::pixels::Color;
 use sdl2::event::Event;
 use sdl2::keyboard::{Keycode, Mod};
-use sdl2::rect::{Point, Rect};
-use sdl2::render::Canvas;
-use sdl2::sys::Window;
-use vecm::vec::{Vec2i, Vec2u, Vec2};
+use sdl2::{rect::{Rect, Point}, pixels::Color, render::{Canvas, Texture}, video::Window, sys::PropModePrepend};
+use vecm::vec::{Vec2i, Vec2u, Vec2, VecInto};
 
 use std::path::Path;
 //use world::celo::Celo;
@@ -40,7 +37,7 @@ fn main() -> Result<(), String> {
     let mut canvas: Canvas<sdl2::video::Window> = window.into_canvas().build()
         .expect("could not make a canvas");
     
-    let mut screen_size = Vec2u::new(640, 640);
+    let mut screen_size = Vec2u::new(400, 400);
     canvas.set_blend_mode(sdl2::render::BlendMode::Blend);
     canvas.set_draw_color(Color::RGB(0, 0, 0));
     canvas.clear();
@@ -51,22 +48,15 @@ fn main() -> Result<(), String> {
     let texture_creator = canvas.texture_creator();
     let pieces_texture = texture_creator.load_texture(chess_pieces)?;
     let tex_atlas = TextureAtlas::new(&pieces_texture, 90);
-    let mut board = Board::new(&tex_atlas);
+    //let mut board = Board2::new(&tex_atlas);
+    let field_size = 50;
+    let mut board_renderer = BoardRenderer::new(Vec2u::fill(8));
+    let mut renderer = Renderer::new(&tex_atlas, 200.0, &mut canvas);
 
-    let mut s_tick = 0.0;
-    let s_tick_increment = 200.0;
-
-    let mut last_frame_time = Instant::now();
 
     let mut turn = Side::White;
 
     'running: loop {
-        let current_frame_time = Instant::now();
-        let dt = (current_frame_time - last_frame_time).as_secs_f32();
-        last_frame_time = current_frame_time;
-
-        canvas.set_draw_color(Color::RGB(0, 0, 0));
-        canvas.clear();
         for event in event_pump.poll_iter() {
             match event {
                 Event::MouseMotion {x, y, ..} => {
@@ -101,10 +91,11 @@ fn main() -> Result<(), String> {
             }
         }
 
-        let sx = inputs.mouse_pos.x / 50;
-        let sy = inputs.mouse_pos.y / 50;
-        let i = (sx + sy*8) as u8;
-        board.hover(i);
+        let cursor_field = (inputs.mouse_pos / field_size).vec_into();
+        board_renderer.hover(cursor_field);
+        board_renderer.render(&mut renderer);
+        renderer.render();
+        /*board.hover(i);
 
         if inputs.pressed(Control::Escape) {
             board.unselect();
@@ -127,6 +118,8 @@ fn main() -> Result<(), String> {
 
         board.draw(&mut canvas, turn, dt);
 
+        //promoting(screen_size, Side::White, &mut canvas, &tex_atlas);
+
         if let Some(f) = board.get_selected_fig() {
             if s_tick + s_tick_increment*dt >= 255.0 {
                 s_tick = 0.0;
@@ -142,10 +135,9 @@ fn main() -> Result<(), String> {
             canvas.copy(tex_atlas.pieces_texture, *src, dst).unwrap();
           } else {
             s_tick = 0.0;
-        }
+        }*/
 
-        
-        canvas.present();
+    
         
         use sdl2::mouse::MouseButton::*;
         inputs.mouse_up(Left);
@@ -161,3 +153,50 @@ fn main() -> Result<(), String> {
 fn parabola(x: i32) -> f32 {
     -1.0 * (0.125 * x as f32 - 16.0).powi(2) + 256.0
 }
+/*
+
+fn promoting(window_size: Vec2u, side: Side, canvas: &mut Canvas<Window>, tex_atlas: &TextureAtlas) {
+    let center = Point::new((window_size.x / 2) as i32 , (window_size.y / 2) as i32);
+    let r = Rect::from_center(center, 120, 120);
+    if side == Side::White {
+        canvas.set_draw_color(Color::RGB(0,0,0));
+    } else {
+        canvas.set_draw_color(Color::RGB(255,255,255));
+    }
+    canvas.fill_rect(r).unwrap();
+
+    match side {
+        Side::White => {
+            for i in 1..=4 {
+                let mut x  = i * 60 + (window_size.x as i32 / 2) - 120;
+                let mut y = (window_size.y  as i32/ 2) - 60;
+                if i > 2 {
+                    y += 60;
+                    x -= 120;
+                }
+
+                let size = 60;
+                let src = tex_atlas.figure_atlas_cords.get(&(i * 2)).unwrap_or_else(|| panic!("Couldnt find tex for promoting tex_id {}",  i));
+                let dst = Rect::new(x, y, size, size);
+                canvas.copy(tex_atlas.pieces_texture, *src, dst).unwrap();
+
+            }
+        },
+        Side::Black => {
+            for i in 1..=4 {
+                let mut x  = i * 60 + (window_size.x as i32 / 2) - 120;
+                let mut y = (window_size.y  as i32/ 2) - 60;
+                if i > 2 {
+                    y += 60;
+                    x -= 120;
+                }
+
+                let size = 60;
+                let src = tex_atlas.figure_atlas_cords.get(&((i * 2) + 1)).unwrap_or_else(|| panic!("Couldnt find tex for promoting tex_id {}",  i));
+                let dst = Rect::new(x, y, size, size);
+                canvas.copy(tex_atlas.pieces_texture, *src, dst).unwrap();
+
+            }
+        }
+    }
+}*/

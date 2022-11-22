@@ -1,6 +1,6 @@
 
 #[derive(Clone, Copy, PartialEq)]
-pub enum FigureType {
+pub enum PieceType {
     Queen,
     King,
     Knight,
@@ -11,15 +11,14 @@ pub enum FigureType {
 
 
 #[derive(Clone, Copy)]
-pub struct Figure {
-    pub ty: FigureType,
+pub struct Piece {
+    pub ty: PieceType,
     pub side: Side,
-    pub tex_id: i32, 
 }
 
-impl Figure  {
-    pub fn new(ty: FigureType, side: Side, tex_id: i32) -> Self {
-        Self { ty, side, tex_id}
+impl Piece  {
+    pub fn new(ty: PieceType, side: Side) -> Self {
+        Self { ty, side}
     }
 }
 
