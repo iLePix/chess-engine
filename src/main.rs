@@ -1,3 +1,4 @@
+#![feature(let_chains)]
 pub mod pieces;
 pub mod board;
 pub mod macros;
@@ -5,7 +6,7 @@ pub mod atlas;
 pub mod renderer;
 
 use atlas::TextureAtlas;
-use board::{BoardRenderer, Board, BoardBuilder, ColorTheme};
+use board::{BoardRenderer, Board, ColorTheme, gen_starting_pos};
 use pieces::{Piece, Side};
 use input::InputHandler;
 use renderer::Renderer;
@@ -23,6 +24,7 @@ mod input;
 
 
 use crate::input::Control;
+
 
 
 fn main() -> Result<(), String> {
@@ -52,9 +54,15 @@ fn main() -> Result<(), String> {
     let tex_atlas = TextureAtlas::new(&pieces_texture, 90);
     //let mut board = Board2::new(&tex_atlas);
     let field_size = 50;
-    let color_theme = ColorTheme::new(Color::WHITE, Color::BLUE);
+    let color_theme = ColorTheme {
+        board_primary: Color::WHITE,
+        board_secondary: Color::BLUE,
+        valid_moves: Color::RGBA(3, 138, 255, 128),
+        selection: Color::RGBA(255, 123, 98, 200)
+    };
     let mut renderer = Renderer::new(&tex_atlas, 200.0, &mut canvas);
-    let mut board = BoardBuilder::gen_starting_pos();
+    let mut board = gen_starting_pos();
+    board.valid_moves();
     let mut board_renderer = BoardRenderer::new(field_size, color_theme, &board);
 
 
@@ -113,7 +121,7 @@ fn main() -> Result<(), String> {
 
 
         if inputs.left_click {
-            board_renderer.select(cursor_field);
+            board_renderer.select(cursor_field, turn);
             /*if board.selected.is_none() {
                 board.select(i, turn);
             } else if board.move_figure(i) {
@@ -124,6 +132,9 @@ fn main() -> Result<(), String> {
             }*/
         }
 
+        board_renderer.hover(cursor_field);
+        board_renderer.render(&turn, &mut renderer);
+
         if let Some(piece) = board_renderer.get_selected_piece() {
             if s_tick + s_tick_increment*dt >= 255.0 {
                 s_tick = 0.0;
@@ -133,13 +144,14 @@ fn main() -> Result<(), String> {
             let p = (parabola(s_tick as i32) / 20.0);
             let size = field_size + p as u32;
             let dst = Rect::from_center(Point::new(inputs.mouse_pos.x as i32 , inputs.mouse_pos.y as i32), size, size);
-            renderer.draw_image(piece.ty, piece.side, dst);
+            renderer.draw_image(piece.ty, piece.side, dst, 3);
         } else {
             s_tick = 0.0;
         }
 
-        board_renderer.hover(cursor_field);
-        board_renderer.render(&turn, &mut renderer);
+        //println!("DEPTH IN RENDERER IS MISSING");
+
+
         renderer.render();
 
         /*if let Some(f) = board.get_selected_fig() {

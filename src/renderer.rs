@@ -10,8 +10,8 @@ use crate::{atlas::{TextureAtlas}, pieces::{Piece, PieceType, Side}};
 pub struct Renderer<'a> {
     tex_atlas: &'a TextureAtlas<'a>,
     canvas: &'a mut Canvas<Window>,
-    rects: Vec<(Rect, Color)>,
-    images: Vec<((PieceType, Side), Rect)>,
+    rects: Vec<(Rect, Color, i32)>,
+    images: Vec<((PieceType, Side), Rect, i32)>,
     last_frame_time: Instant,
     s_tick: f32,
     s_tick_increment: f32
@@ -23,12 +23,12 @@ impl<'a> Renderer<'a> {
         Self {tex_atlas, rects: Vec::new(), images: Vec::new(), last_frame_time: Instant::now(), s_tick: 0.0, s_tick_increment, canvas}
     }
     
-    pub fn draw_rect(&mut self, rect: Rect, color: Color) {
-        self.rects.push((rect, color));
+    pub fn draw_rect(&mut self, rect: Rect, color: Color, depth: i32) {
+        self.rects.push((rect, color, depth));
     }
 
-    pub fn draw_image(&mut self, piece_ty: PieceType, side: Side, dst: Rect) {
-        self.images.push(((piece_ty, side), dst));
+    pub fn draw_image(&mut self, piece_ty: PieceType, side: Side, dst: Rect, depth: i32) {
+        self.images.push(((piece_ty, side), dst, depth));
     }
 
     pub fn render(&mut self) {

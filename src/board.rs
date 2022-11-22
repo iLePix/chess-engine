@@ -14,7 +14,7 @@ pub struct Board {
     size: Vec2u,
     //0 = White, 1, Black
     pawn_start_y: (u32, u32),
-    //valid_moves: HashMap<Vec2i, HashSet<Vec2i>>,
+    pub valid_moves: HashMap<Vec2i, HashSet<Vec2i>>,
     //0 = left, 1 = right
     white_castling_possible: (bool, bool),
     black_castling_possible: (bool, bool),
@@ -24,7 +24,7 @@ pub struct Board {
 
 impl Board {
     pub fn new(board: Vec<Vec<Option<Piece>>>, size: Vec2u, pawn_start_y: (u32, u32), white_castling_possible: (bool, bool), black_castling_possible: (bool, bool), en_passant_possible: Option<Vec2i>) -> Self {
-        Self {board, size, pawn_start_y, white_castling_possible, black_castling_possible, en_passant_possible, beaten_figures: Vec::new()}
+        Self {board, size, pawn_start_y, valid_moves: HashMap::new(), white_castling_possible, black_castling_possible, en_passant_possible, beaten_figures: Vec::new()}
     }
 
     fn valid_moves_for_piece(&self, piece_pos: Vec2i) -> HashSet<Vec2i> {
@@ -78,9 +78,11 @@ impl Board {
             ];
             for mv in moves {
                 let new_pos = piece_pos + mv;
-                match self.get_piece_at_pos(new_pos.vec_into()) {
-                        Some(other_piece) => if other_piece.side != piece.side {valid_moves.insert(new_pos.vec_into());},
-                        None => {valid_moves.insert(new_pos.vec_into());}
+                if self.is_on_board(new_pos) {
+                    match self.get_piece_at_pos(new_pos) {
+                        Some(other_piece) => if other_piece.side != piece.side {valid_moves.insert(new_pos);},
+                        None => {valid_moves.insert(new_pos);}
+                    }
                 }
             }
         };
@@ -103,20 +105,20 @@ impl Board {
 
         let pawn = |valid_mvs: &mut HashSet<Vec2i>| {
             let y_dir = match piece.side {
-                Side::Black => -1,
-                Side::White => 1
+                Side::Black => 1,
+                Side::White => -1
             };
             for y in [y_dir, y_dir*2] {
-                let new_pos = piece_pos + Vec2i::new(0, y_dir);
+                let new_pos = piece_pos + Vec2i::new(0, y);
                 if self.is_on_board(new_pos) && self.space_is_empty(piece_pos, new_pos) {
-                    valid_mvs.insert(new_pos.vec_into());
+                    valid_mvs.insert(new_pos);
                 }
             };
             for x_dir in [-1, 1] {
                 let new_pos = piece_pos + Vec2i::new(x_dir, y_dir);
                 if self.is_on_board(new_pos) {
-                    if let Some(other_piece) = self.get_piece_at_pos(new_pos.vec_into()) {
-                        if other_piece.side != piece.side {valid_mvs.insert(new_pos.vec_into());}
+                    if let Some(other_piece) = self.get_piece_at_pos(new_pos) {
+                        if other_piece.side != piece.side {valid_mvs.insert(new_pos);}
                     }
                 } 
             };
@@ -148,9 +150,20 @@ impl Board {
 
 
 
-    fn valid_moves(&self) -> HashMap<Vec2i, HashSet<Vec2i>> {
+    pub fn valid_moves(&mut self) -> HashMap<Vec2i, HashSet<Vec2i>> {
         let mut valid_moves: HashMap<Vec2i, HashSet<Vec2i>>  = HashMap::new();
-
+        for (x, y_row) in self.board.iter().enumerate() {
+            for (y, optional_piece) in y_row.iter().enumerate() {
+                if optional_piece.is_some() {
+                    let pos = Vec2i::new(x as i32, y as i32);
+                    let mvs = self.valid_moves_for_piece(pos);
+                    if !mvs.is_empty() {
+                        valid_moves.insert(pos, mvs);
+                    }
+                }
+            }
+        }
+        self.valid_moves = valid_moves.clone();
         valid_moves
     }
 
@@ -175,78 +188,78 @@ impl Board {
 
 }
 
-pub struct BoardBuilder {}
-impl BoardBuilder {
-    pub fn gen_starting_pos() -> Board {
-        let mut board = vec![vec![None; 8]; 8];
-    
-    
-        //gen black
-        let mut side = Side::Black;
-        //pawns
-        for x in 0..=7 {
-            board[x][1] = Some(Piece::new(PieceType::Pawn, side));
-        }
-    
-        //rooks
-        board[0][0] = Some(Piece::new(PieceType::Rook, side));
-        board[7][0] = Some(Piece::new(PieceType::Rook, side));
-    
-        //knights
-        board[1][0] = Some(Piece::new(PieceType::Knight, side));
-        board[6][0] = Some(Piece::new(PieceType::Knight, side));
-    
-        //bishops
-        board[2][0] = Some(Piece::new(PieceType::Bishop, side));
-        board[5][0] = Some(Piece::new(PieceType::Bishop, side));
-    
-        //king & queen
-        board[3][0] = Some(Piece::new(PieceType::Queen, side));
-        board[4][0] = Some(Piece::new(PieceType::King, side));
-    
-        //gen white
-        side = Side::White;
-        //pawns
-        for x in 0..=7 {
-            board[x][6] = Some(Piece::new(PieceType::Pawn, side));
-        }
-    
-        //rooks
-        board[0][7] = Some(Piece::new(PieceType::Rook, side));
-        board[7][7] = Some(Piece::new(PieceType::Rook, side));
-    
-        //knights
-        board[1][7] = Some(Piece::new(PieceType::Knight, side));
-        board[6][7] = Some(Piece::new(PieceType::Knight, side));
-    
-        //bishops
-        board[2][7] = Some(Piece::new(PieceType::Bishop, side));
-        board[5][7] = Some(Piece::new(PieceType::Bishop, side));
-    
-        //king & queen
-        board[3][7] = Some(Piece::new(PieceType::Queen, side));
-        board[4][7] = Some(Piece::new(PieceType::King, side));
-    
-        Board {
-            white_castling_possible: (false, false),
-            black_castling_possible: (false, false),
-            en_passant_possible: None,
-            board,
-            size: Vec2u::fill(8),
-            pawn_start_y: (1,6),
-            beaten_figures: Vec::new(),
-        }
+
+pub fn gen_starting_pos() -> Board {
+    let mut board = vec![vec![None; 8]; 8];
+
+
+    //gen black
+    let mut side = Side::Black;
+    //pawns
+    for x in 0..=7 {
+        board[x][1] = Some(Piece::new(PieceType::Pawn, side));
     }
+
+    //rooks
+    board[0][0] = Some(Piece::new(PieceType::Rook, side));
+    board[7][0] = Some(Piece::new(PieceType::Rook, side));
+
+    //knights
+    board[1][0] = Some(Piece::new(PieceType::Knight, side));
+    board[6][0] = Some(Piece::new(PieceType::Knight, side));
+
+    //bishops
+    board[2][0] = Some(Piece::new(PieceType::Bishop, side));
+    board[5][0] = Some(Piece::new(PieceType::Bishop, side));
+
+    //king & queen
+    board[3][0] = Some(Piece::new(PieceType::Queen, side));
+    board[4][0] = Some(Piece::new(PieceType::King, side));
+
+    //gen white
+    side = Side::White;
+    //pawns
+    for x in 0..=7 {
+        board[x][6] = Some(Piece::new(PieceType::Pawn, side));
+    }
+
+    //rooks
+    board[0][7] = Some(Piece::new(PieceType::Rook, side));
+    board[7][7] = Some(Piece::new(PieceType::Rook, side));
+
+    //knights
+    board[1][7] = Some(Piece::new(PieceType::Knight, side));
+    board[6][7] = Some(Piece::new(PieceType::Knight, side));
+
+    //bishops
+    board[2][7] = Some(Piece::new(PieceType::Bishop, side));
+    board[5][7] = Some(Piece::new(PieceType::Bishop, side));
+
+    //king & queen
+    board[3][7] = Some(Piece::new(PieceType::Queen, side));
+    board[4][7] = Some(Piece::new(PieceType::King, side));
+
+    Board::new(
+        board,
+        Vec2u::fill(8),
+        (1,6),
+        (false, false),
+        (false, false),
+        None,
+    )
 }
 
+
 pub struct ColorTheme {
-    board_primary: Color,
-    board_secondary: Color,
+    pub board_primary: Color,
+    pub board_secondary: Color,
+    pub valid_moves: Color,
+    pub selection: Color
 }
 
 impl ColorTheme {
-    pub fn new(board_primary: Color, board_secondary: Color) -> Self {
-        Self {board_primary, board_secondary}
+    pub fn new(board_primary: Color, board_secondary: Color,   valid_moves: Color, selection: Color) -> Self {
+        Self {board_primary, board_secondary, valid_moves, selection}
     }
 }
 
@@ -290,25 +303,42 @@ impl<'a> BoardRenderer<'a> {
 
     pub fn render(&mut self, turn: &Side, renderer: &mut Renderer) {
         for rect in &self.board_ground {
-            renderer.draw_rect(rect.0, rect.1);
+            renderer.draw_rect(rect.0, rect.1, 0);
         }
 
         for (x, y_row) in  self.board.board.iter().enumerate() {
             for (y, optional_piece) in y_row.iter().enumerate() {
                 //dont draw selection
-                if let Some(selected) = self.selected {
-                    if selected.x == x as i32 && selected.y == y as i32{
-                        continue;
+                let field_pos = Vec2i::new(x as i32,y as i32);
+                if let Some(selected) = self.selected && selected == field_pos {
+                    
+                    //if something selected then draw valid moves
+                    let r_size = (Vec2u::fill(self.field_size) * 3) / 4;
+                    if let Some(valid_moves) = self.board.valid_moves.get(&selected) {
+                        for mv in valid_moves {
+                            let r_center = *mv * self.field_size as i32 + Vec2i::fill(self.field_size as i32 / 2);
+                            let rect = Rect::from_center(Point::new(r_center.x, r_center.y), r_size.x, r_size.y);
+                            let color = self.color_theme.valid_moves;
+                            renderer.draw_rect(rect, color, 0);
+                        }
                     }
+                    let r_center = field_pos * self.field_size as i32 + Vec2i::fill(self.field_size as i32 / 2);
+                    let color = self.color_theme.selection;
+                    let rect = Rect::from_center(Point::new(r_center.x, r_center.y), r_size.x, r_size.y);
+                    renderer.draw_rect(rect, color, 0);
+
+                    continue;
                 }
 
+                //possible moves: depth = 1
+
                 if let Some(piece) = optional_piece {
-                    let mut pos = Vec2i::new((x as u32 * self.field_size) as i32, (y as u32 * self.field_size) as i32);
+                    let mut window_pos = field_pos * self.field_size as i32;
                     let mut size = self.field_size;
                     //hovering expands piece
                     if let Some(hover_pos) = self.hovering{
                         if &piece.side == turn && hover_pos.x == x as i32 && hover_pos.y == y as i32{
-                            pos -= 5;
+                            window_pos -= 5;
                             size += 10;
                         }
                     }
@@ -316,7 +346,9 @@ impl<'a> BoardRenderer<'a> {
                     renderer.draw_image(
                         piece.ty,
                         piece.side,
-                        Rect::new(pos.x,pos.y, size, size))           
+                        Rect::new(window_pos.x,window_pos.y, size, size),
+                        2
+                    )           
                 }
             }
         }
@@ -334,7 +366,7 @@ impl<'a> BoardRenderer<'a> {
         None
     }
 
-    pub fn select(&mut self, cursor_field: Vec2i) -> Option<Piece> {
+    pub fn select(&mut self, cursor_field: Vec2i, turn: Side) -> Option<Piece> {
         //previous selection
         if let Some(selected) = self.selected {
             if selected.x == cursor_field.x && selected.y == cursor_field.y {
@@ -343,11 +375,13 @@ impl<'a> BoardRenderer<'a> {
             }
             None
         } else {
-            let selection = self.board.get_piece_at_pos(cursor_field);
-            if selection.is_some() {
-                self.selected = Some(cursor_field);
+            if let Some(selection) = self.board.get_piece_at_pos(cursor_field) {
+                if selection.side == turn {
+                    self.selected = Some(cursor_field);
+                    return Some(selection)
+                }
             }
-            selection
+            None
         }
     }
 

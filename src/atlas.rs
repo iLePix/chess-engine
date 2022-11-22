@@ -22,12 +22,12 @@ impl<'a> TextureAtlas<'a> {
             (PieceType::Queen, Side::White) => Vec2i::new(1,0),
             (PieceType::King, Side::Black) => Vec2i::new(0,1),
             (PieceType::King, Side::White) => Vec2i::new(0,0),
-            (PieceType::Knight, Side::Black) => Vec2i::new(4,1),
-            (PieceType::Knight, Side::White) => Vec2i::new(4,0),
+            (PieceType::Knight, Side::Black) => Vec2i::new(3,1),
+            (PieceType::Knight, Side::White) => Vec2i::new(3,0),
             (PieceType::Bishop, Side::Black) => Vec2i::new(2,1),
             (PieceType::Bishop, Side::White) => Vec2i::new(2,0),
-            (PieceType::Rook, Side::Black) => Vec2i::new(3,1),
-            (PieceType::Rook, Side::White) => Vec2i::new(3,0),
+            (PieceType::Rook, Side::Black) => Vec2i::new(4,1),
+            (PieceType::Rook, Side::White) => Vec2i::new(4,0),
             (PieceType::Pawn, Side::Black) => Vec2i::new(5,1),
             (PieceType::Pawn, Side::White) => Vec2i::new(5,0)
         };
