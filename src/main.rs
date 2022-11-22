@@ -1,4 +1,5 @@
 #![feature(let_chains)]
+#![feature(hash_drain_filter)]
 pub mod pieces;
 pub mod board;
 pub mod macros;
@@ -7,7 +8,7 @@ pub mod renderer;
 pub mod board_renderer;
 
 use atlas::TextureAtlas;
-use board::{Board, ColorTheme, gen_starting_pos};
+use board::{Board, ColorTheme, gen_starting_pos, gen_kings_pos};
 use board_renderer::BoardRenderer;
 use pieces::{Piece, Side};
 use input::InputHandler;
@@ -64,12 +65,12 @@ fn main() -> Result<(), String> {
         selection: Color::RGBA(255, 123, 98, 200)
     };
     let mut renderer = Renderer::new(&tex_atlas, 200.0, &mut canvas);
-    let mut board = gen_starting_pos();
-    board.valid_moves();
-    let mut board_renderer = BoardRenderer::new(field_size, color_theme, board_size);
-
-
     let mut turn = Side::White;
+    let mut board = gen_starting_pos();
+    board.calculate_valid_moves(turn);
+    let mut board_renderer = BoardRenderer::new(field_size, color_theme, board_size, 2.0);
+
+
 
     let mut last_frame_time = Instant::now();
     let mut s_tick = 0.0;
@@ -126,19 +127,19 @@ fn main() -> Result<(), String> {
         if inputs.left_click {
             if board_renderer.selected.is_none() {
                 board_renderer.select(cursor_field, turn, &board);
-            } else if board.make_move(board_renderer.selected.unwrap(), cursor_field) {
+            } else if board.make_move(&board_renderer.selected.unwrap(), &cursor_field, turn) {
                 board_renderer.unselect();
                 turn = match turn {
                     Side::Black => Side::White,
                     Side::White => Side::Black,
-                }
+                };
             } else if cursor_field == board_renderer.selected.unwrap() {
                 board_renderer.unselect();
             }
         }
 
         board_renderer.hover(cursor_field);
-        board_renderer.render(&turn, &board, &mut renderer);
+        board_renderer.render(&turn, &board, &mut renderer, dt);
 
         if let Some(piece) = board_renderer.get_selected_piece(&board) {
             if s_tick + s_tick_increment*dt >= 255.0 {
@@ -154,7 +155,6 @@ fn main() -> Result<(), String> {
             s_tick = 0.0;
         }
 
-        //println!("DEPTH IN RENDERER IS MISSING");
 
 
         renderer.render();
@@ -218,50 +218,3 @@ fn main() -> Result<(), String> {
 fn parabola(x: i32) -> f32 {
     -1.0 * (0.125 * x as f32 - 16.0).powi(2) + 256.0
 }
-/*
-
-fn promoting(window_size: Vec2u, side: Side, canvas: &mut Canvas<Window>, tex_atlas: &TextureAtlas) {
-    let center = Point::new((window_size.x / 2) as i32 , (window_size.y / 2) as i32);
-    let r = Rect::from_center(center, 120, 120);
-    if side == Side::White {
-        canvas.set_draw_color(Color::RGB(0,0,0));
-    } else {
-        canvas.set_draw_color(Color::RGB(255,255,255));
-    }
-    canvas.fill_rect(r).unwrap();
-
-    match side {
-        Side::White => {
-            for i in 1..=4 {
-                let mut x  = i * 60 + (window_size.x as i32 / 2) - 120;
-                let mut y = (window_size.y  as i32/ 2) - 60;
-                if i > 2 {
-                    y += 60;
-                    x -= 120;
-                }
-
-                let size = 60;
-                let src = tex_atlas.figure_atlas_cords.get(&(i * 2)).unwrap_or_else(|| panic!("Couldnt find tex for promoting tex_id {}",  i));
-                let dst = Rect::new(x, y, size, size);
-                canvas.copy(tex_atlas.pieces_texture, *src, dst).unwrap();
-
-            }
-        },
-        Side::Black => {
-            for i in 1..=4 {
-                let mut x  = i * 60 + (window_size.x as i32 / 2) - 120;
-                let mut y = (window_size.y  as i32/ 2) - 60;
-                if i > 2 {
-                    y += 60;
-                    x -= 120;
-                }
-
-                let size = 60;
-                let src = tex_atlas.figure_atlas_cords.get(&((i * 2) + 1)).unwrap_or_else(|| panic!("Couldnt find tex for promoting tex_id {}",  i));
-                let dst = Rect::new(x, y, size, size);
-                canvas.copy(tex_atlas.pieces_texture, *src, dst).unwrap();
-
-            }
-        }
-    }
-}*/

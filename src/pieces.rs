@@ -1,3 +1,5 @@
+use std::ops::Not;
+
 
 #[derive(Clone, Copy, PartialEq)]
 pub enum PieceType {
@@ -25,8 +27,19 @@ impl Piece  {
 
 //king, rook, bishop, queen, knight, and pawn.
 
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, PartialEq, Debug)]
 pub enum Side {
     Black,
     White
+}
+
+impl Not for Side {
+    type Output = Self;
+
+    fn not(self) -> Self {
+        match self {
+            Side::Black => Side::White,
+            Side::White => Side::Black,
+        }
+    }
 }
