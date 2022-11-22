@@ -13,7 +13,8 @@ pub struct Board {
     board: Vec<Vec<Option<Piece>>>,//[[Option<Piece>; 8]; 8],
     size: Vec2u,
     //0 = White, 1, Black
-    pawn_start_y: (u32, u32), 
+    pawn_start_y: (u32, u32),
+    //valid_moves: HashMap<Vec2i, HashSet<Vec2i>>,
     //0 = left, 1 = right
     white_castling_possible: (bool, bool),
     black_castling_possible: (bool, bool),
@@ -28,7 +29,6 @@ impl Board {
 
     fn valid_moves_for_piece(&self, piece_pos: Vec2i) -> HashSet<Vec2i> {
         let mut valid_moves: HashSet<Vec2i> = HashSet::new();
-        //let piece = self.board.get(piece_pos.x).get;
         let piece = self.get_piece_at_pos(piece_pos).expect("Tried to calculate possible moves for nonexisiting pieces");
         
         let mvs_in_direction = |dir: Vec2i, valid_mvs: &mut HashSet<Vec2i>| {
@@ -265,7 +265,7 @@ pub struct BoardRenderer<'a> {
 
 
 impl<'a> BoardRenderer<'a> {
-    pub fn new(size: Vec2u, field_size: u32, color_theme: ColorTheme, board: &'a Board) -> Self {
+    pub fn new(field_size: u32, color_theme: ColorTheme, board: &'a Board) -> Self {
         let mut board_ground: Vec<(Rect, Color)> = Vec::new();
         let mut color = Color::WHITE;
         for x in 0..(board.size.x as i32) {
@@ -327,12 +327,28 @@ impl<'a> BoardRenderer<'a> {
         self.selected = None
     }
 
-    pub fn select(&mut self, cursor_field: Vec2i) -> Option<Piece> {
-        let selection = self.board.get_piece_at_pos(cursor_field);
-        if selection.is_some() {
-            self.selected = Some(cursor_field);
+    pub fn get_selected_piece(&self) -> Option<Piece> {
+        if let Some(selected) = self.selected {
+            return self.board.get_piece_at_pos(selected)
         }
-        selection
+        None
+    }
+
+    pub fn select(&mut self, cursor_field: Vec2i) -> Option<Piece> {
+        //previous selection
+        if let Some(selected) = self.selected {
+            if selected.x == cursor_field.x && selected.y == cursor_field.y {
+                println!("Selecting same field: {}", cursor_field);
+                self.unselect();
+            }
+            None
+        } else {
+            let selection = self.board.get_piece_at_pos(cursor_field);
+            if selection.is_some() {
+                self.selected = Some(cursor_field);
+            }
+            selection
+        }
     }
 
 }

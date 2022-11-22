@@ -55,12 +55,21 @@ fn main() -> Result<(), String> {
     let color_theme = ColorTheme::new(Color::WHITE, Color::BLUE);
     let mut renderer = Renderer::new(&tex_atlas, 200.0, &mut canvas);
     let mut board = BoardBuilder::gen_starting_pos();
-    let mut board_renderer = BoardRenderer::new(Vec2u::fill(8), field_size, color_theme, &board);
+    let mut board_renderer = BoardRenderer::new(field_size, color_theme, &board);
 
 
     let mut turn = Side::White;
 
+    let mut last_frame_time = Instant::now();
+    let mut s_tick = 0.0;
+    let s_tick_increment = 200.0;
+
     'running: loop {
+        let current_frame_time = Instant::now();
+        let dt = (current_frame_time - last_frame_time).as_secs_f32();
+        last_frame_time = current_frame_time;
+
+
         for event in event_pump.poll_iter() {
             match event {
                 Event::MouseMotion {x, y, ..} => {
@@ -96,9 +105,6 @@ fn main() -> Result<(), String> {
         }
 
         let cursor_field = (inputs.mouse_pos / field_size).vec_into();
-        board_renderer.hover(cursor_field);
-        board_renderer.render(&turn, &mut renderer);
-        renderer.render();
   
 
         if inputs.pressed(Control::Escape) {
@@ -117,6 +123,43 @@ fn main() -> Result<(), String> {
                 }
             }*/
         }
+
+        if let Some(piece) = board_renderer.get_selected_piece() {
+            if s_tick + s_tick_increment*dt >= 255.0 {
+                s_tick = 0.0;
+            } else {
+                s_tick += dt * s_tick_increment as f32;
+            }
+            let p = (parabola(s_tick as i32) / 20.0);
+            let size = field_size + p as u32;
+            let dst = Rect::from_center(Point::new(inputs.mouse_pos.x as i32 , inputs.mouse_pos.y as i32), size, size);
+            renderer.draw_image(piece.ty, piece.side, dst);
+        } else {
+            s_tick = 0.0;
+        }
+
+        board_renderer.hover(cursor_field);
+        board_renderer.render(&turn, &mut renderer);
+        renderer.render();
+
+        /*if let Some(f) = board.get_selected_fig() {
+            if s_tick + s_tick_increment*dt >= 255.0 {
+                s_tick = 0.0;
+            } else {
+                s_tick += dt * s_tick_increment as f32;
+            }
+
+            let p = (parabola(s_tick as i32) / 20.0);
+            let size = 50 + p as u32;
+            let src = tex_atlas.figure_atlas_cords.get(&f.tex_id)
+                    .unwrap_or_else(|| panic!("Created figure with wrong tex-index {}", f.tex_id));
+            let dst = Rect::from_center(Point::new(inputs.mouse_pos.x as i32 , inputs.mouse_pos.y as i32), size, size);
+            canvas.copy(tex_atlas.pieces_texture, *src, dst).unwrap();
+          } else {
+            s_tick = 0.0;
+        }*/
+
+
         
         /* 
 
