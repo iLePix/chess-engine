@@ -10,8 +10,8 @@ use crate::{pieces::{Piece, Side, PieceType}, hashmap, count, atlas::TextureAtla
 
 
 pub struct Board {
-    board: Vec<Vec<Option<Piece>>>,//[[Option<Piece>; 8]; 8],
-    size: Vec2u,
+    pub board: Vec<Vec<Option<Piece>>>,//[[Option<Piece>; 8]; 8],
+    pub size: Vec2u,
     //0 = White, 1, Black
     pawn_start_y: (u32, u32),
     pub valid_moves: HashMap<Vec2i, HashSet<Vec2i>>,
@@ -19,12 +19,12 @@ pub struct Board {
     white_castling_possible: (bool, bool),
     black_castling_possible: (bool, bool),
     en_passant_possible: Option<Vec2i>,
-    beaten_figures: Vec<Piece>,
+    captured_pieces: Vec<Piece>,
 }
 
 impl Board {
     pub fn new(board: Vec<Vec<Option<Piece>>>, size: Vec2u, pawn_start_y: (u32, u32), white_castling_possible: (bool, bool), black_castling_possible: (bool, bool), en_passant_possible: Option<Vec2i>) -> Self {
-        Self {board, size, pawn_start_y, valid_moves: HashMap::new(), white_castling_possible, black_castling_possible, en_passant_possible, beaten_figures: Vec::new()}
+        Self {board, size, pawn_start_y, valid_moves: HashMap::new(), white_castling_possible, black_castling_possible, en_passant_possible, captured_pieces: Vec::new()}
     }
 
     fn valid_moves_for_piece(&self, piece_pos: Vec2i) -> HashSet<Vec2i> {
@@ -110,7 +110,7 @@ impl Board {
             };
             for y in [y_dir, y_dir*2] {
                 let new_pos = piece_pos + Vec2i::new(0, y);
-                if self.is_on_board(new_pos) && self.space_is_empty(piece_pos, new_pos) {
+                if self.is_on_board(new_pos) && self.space_is_empty(piece_pos + Vec2i::new(0,y_dir), new_pos) {
                     valid_mvs.insert(new_pos);
                 }
             };
@@ -167,8 +167,41 @@ impl Board {
         valid_moves
     }
 
+    //returns if move was possible
+    pub fn make_move(&mut self, piece_pos: Vec2i, dst: Vec2i) -> bool {
+        let valid_moves = self.valid_moves.get(&piece_pos).expect("generated no move for piece");
+        if valid_moves.contains(&dst) {
+            self.move_piece(piece_pos, dst);           
+            return true
+        }
+        false
+    }
 
-    fn get_piece_at_pos(&self, pos: Vec2i) -> Option<Piece> {
+    pub fn set_piece(&mut self, piece: Piece, pos: Vec2i) {
+        if self.is_on_board(pos) {
+            self.board[pos.x as usize][pos.y as usize] = Some(piece);
+        }
+    }
+
+    pub fn move_piece(&mut self, pos: Vec2i, dst: Vec2i) {
+        if let Some(piece) = self.get_piece_at_pos(pos) {
+            //if there is a figure at the dst
+            if let Some(dst_piece) = self.get_piece_at_pos(dst) {
+                self.captured_pieces.push(dst_piece);
+            }
+            self.set_piece(piece, dst);
+            self.remove_piece(pos);
+            self.valid_moves = self.valid_moves();
+        }
+    }
+
+    pub fn remove_piece(&mut self, pos: Vec2i) {
+        if self.is_on_board(pos) {
+            self.board[pos.x as usize][pos.y as usize] = None;
+        } 
+    }
+
+    pub fn get_piece_at_pos(&self, pos: Vec2i) -> Option<Piece> {
         if self.is_on_board(pos.vec_into()) {
             return self.board[pos.x as usize][pos.y as usize]
         }
@@ -261,128 +294,4 @@ impl ColorTheme {
     pub fn new(board_primary: Color, board_secondary: Color,   valid_moves: Color, selection: Color) -> Self {
         Self {board_primary, board_secondary, valid_moves, selection}
     }
-}
-
-
-
-pub struct BoardRenderer<'a> {
-    board_ground: Vec<(Rect, Color)>,
-    hovering: Option<Vec2i>,
-    field_size: u32,
-    color_theme: ColorTheme,
-    selected: Option<Vec2i>,
-    valid_mvs_tick: f32,
-    last_move_tick: f32,
-    board: &'a Board,
-}
-
-
-impl<'a> BoardRenderer<'a> {
-    pub fn new(field_size: u32, color_theme: ColorTheme, board: &'a Board) -> Self {
-        let mut board_ground: Vec<(Rect, Color)> = Vec::new();
-        let mut color = Color::WHITE;
-        for x in 0..(board.size.x as i32) {
-            for y in 0..(board.size.y as i32) {
-                let rect = Rect::new(field_size as i32 * x, field_size as i32 * y, field_size, field_size);
-                if (x % 2 == 1 && y % 2 == 0) || (x % 2 == 0 && y % 2 == 1) {
-                    //color = black
-                    color = color_theme.board_secondary;
-                } else {
-                    color = color_theme.board_primary;
-                }
-                board_ground.push((rect, color));
-            }
-        }
-        Self {board_ground, hovering: None, selected: None, valid_mvs_tick: 0.0, last_move_tick: 0.0 , field_size, color_theme, board}
-    }
-
-    pub fn hover(&mut self, pos: Vec2i) {
-        self.hovering = Some(pos);
-    }
-
-
-    pub fn render(&mut self, turn: &Side, renderer: &mut Renderer) {
-        for rect in &self.board_ground {
-            renderer.draw_rect(rect.0, rect.1, 0);
-        }
-
-        for (x, y_row) in  self.board.board.iter().enumerate() {
-            for (y, optional_piece) in y_row.iter().enumerate() {
-                //dont draw selection
-                let field_pos = Vec2i::new(x as i32,y as i32);
-                if let Some(selected) = self.selected && selected == field_pos {
-                    
-                    //if something selected then draw valid moves
-                    let r_size = (Vec2u::fill(self.field_size) * 3) / 4;
-                    if let Some(valid_moves) = self.board.valid_moves.get(&selected) {
-                        for mv in valid_moves {
-                            let r_center = *mv * self.field_size as i32 + Vec2i::fill(self.field_size as i32 / 2);
-                            let rect = Rect::from_center(Point::new(r_center.x, r_center.y), r_size.x, r_size.y);
-                            let color = self.color_theme.valid_moves;
-                            renderer.draw_rect(rect, color, 0);
-                        }
-                    }
-                    let r_center = field_pos * self.field_size as i32 + Vec2i::fill(self.field_size as i32 / 2);
-                    let color = self.color_theme.selection;
-                    let rect = Rect::from_center(Point::new(r_center.x, r_center.y), r_size.x, r_size.y);
-                    renderer.draw_rect(rect, color, 0);
-
-                    continue;
-                }
-
-                //possible moves: depth = 1
-
-                if let Some(piece) = optional_piece {
-                    let mut window_pos = field_pos * self.field_size as i32;
-                    let mut size = self.field_size;
-                    //hovering expands piece
-                    if let Some(hover_pos) = self.hovering{
-                        if &piece.side == turn && hover_pos.x == x as i32 && hover_pos.y == y as i32{
-                            window_pos -= 5;
-                            size += 10;
-                        }
-                    }
-
-                    renderer.draw_image(
-                        piece.ty,
-                        piece.side,
-                        Rect::new(window_pos.x,window_pos.y, size, size),
-                        2
-                    )           
-                }
-            }
-        }
-        self.hovering = None
-    }
-
-    pub fn unselect(&mut self) {
-        self.selected = None
-    }
-
-    pub fn get_selected_piece(&self) -> Option<Piece> {
-        if let Some(selected) = self.selected {
-            return self.board.get_piece_at_pos(selected)
-        }
-        None
-    }
-
-    pub fn select(&mut self, cursor_field: Vec2i, turn: Side) -> Option<Piece> {
-        //previous selection
-        if let Some(selected) = self.selected {
-            if selected.x == cursor_field.x && selected.y == cursor_field.y {
-                println!("Selecting same field: {}", cursor_field);
-                self.unselect();
-            }
-            None
-        } else {
-            if let Some(selection) = self.board.get_piece_at_pos(cursor_field) {
-                if selection.side == turn {
-                    self.selected = Some(cursor_field);
-                    return Some(selection)
-                }
-            }
-            None
-        }
-    }
-
 }

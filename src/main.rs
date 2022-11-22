@@ -4,9 +4,11 @@ pub mod board;
 pub mod macros;
 pub mod atlas;
 pub mod renderer;
+pub mod board_renderer;
 
 use atlas::TextureAtlas;
-use board::{BoardRenderer, Board, ColorTheme, gen_starting_pos};
+use board::{Board, ColorTheme, gen_starting_pos};
+use board_renderer::BoardRenderer;
 use pieces::{Piece, Side};
 use input::InputHandler;
 use renderer::Renderer;
@@ -54,6 +56,7 @@ fn main() -> Result<(), String> {
     let tex_atlas = TextureAtlas::new(&pieces_texture, 90);
     //let mut board = Board2::new(&tex_atlas);
     let field_size = 50;
+    let board_size = Vec2u::fill(8);
     let color_theme = ColorTheme {
         board_primary: Color::WHITE,
         board_secondary: Color::BLUE,
@@ -63,7 +66,7 @@ fn main() -> Result<(), String> {
     let mut renderer = Renderer::new(&tex_atlas, 200.0, &mut canvas);
     let mut board = gen_starting_pos();
     board.valid_moves();
-    let mut board_renderer = BoardRenderer::new(field_size, color_theme, &board);
+    let mut board_renderer = BoardRenderer::new(field_size, color_theme, board_size);
 
 
     let mut turn = Side::White;
@@ -121,21 +124,23 @@ fn main() -> Result<(), String> {
 
 
         if inputs.left_click {
-            board_renderer.select(cursor_field, turn);
-            /*if board.selected.is_none() {
-                board.select(i, turn);
-            } else if board.move_figure(i) {
+            if board_renderer.selected.is_none() {
+                board_renderer.select(cursor_field, turn, &board);
+            } else if board.make_move(board_renderer.selected.unwrap(), cursor_field) {
+                board_renderer.unselect();
                 turn = match turn {
                     Side::Black => Side::White,
                     Side::White => Side::Black,
                 }
-            }*/
+            } else if cursor_field == board_renderer.selected.unwrap() {
+                board_renderer.unselect();
+            }
         }
 
         board_renderer.hover(cursor_field);
-        board_renderer.render(&turn, &mut renderer);
+        board_renderer.render(&turn, &board, &mut renderer);
 
-        if let Some(piece) = board_renderer.get_selected_piece() {
+        if let Some(piece) = board_renderer.get_selected_piece(&board) {
             if s_tick + s_tick_increment*dt >= 255.0 {
                 s_tick = 0.0;
             } else {
