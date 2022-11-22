@@ -2,11 +2,13 @@ pub mod pieces;
 pub mod board;
 pub mod macros;
 pub mod atlas;
+pub mod renderer;
 
 use atlas::TextureAtlas;
-use board::{BoardRenderer, Renderer};
+use board::BoardRenderer;
 use pieces::{Piece, Side};
 use input::InputHandler;
+use renderer::Renderer;
 use sdl2::image::{LoadTexture, InitFlag};
 use sdl2::event::Event;
 use sdl2::keyboard::{Keycode, Mod};
