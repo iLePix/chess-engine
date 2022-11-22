@@ -5,26 +5,6 @@ use vecm::vec::Vec2i;
 
 use crate::{hashmap, count, pieces::{PieceType, Side}};
 
-#[derive(Hash, PartialEq, Eq)]
-enum PieceTexture {
-    KingWhite,
-    KingBlack,
-
-    QueenWhite,
-    QueenBlack,
-
-    BishopWhite,
-    BishopBlack,
-
-    RookWhite,
-    RookBlack,
-
-    KnightWhite,
-    KnightBlack,
-
-    PawnWhite,
-    PawnBlack
-}
 
 pub struct TextureAtlas<'a> {
     pub fig_src_size: u32,

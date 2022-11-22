@@ -5,7 +5,7 @@ pub mod atlas;
 pub mod renderer;
 
 use atlas::TextureAtlas;
-use board::BoardRenderer;
+use board::{BoardRenderer, Board, BoardBuilder, ColorTheme};
 use pieces::{Piece, Side};
 use input::InputHandler;
 use renderer::Renderer;
@@ -52,8 +52,10 @@ fn main() -> Result<(), String> {
     let tex_atlas = TextureAtlas::new(&pieces_texture, 90);
     //let mut board = Board2::new(&tex_atlas);
     let field_size = 50;
-    let mut board_renderer = BoardRenderer::new(Vec2u::fill(8));
+    let color_theme = ColorTheme::new(Color::WHITE, Color::BLUE);
     let mut renderer = Renderer::new(&tex_atlas, 200.0, &mut canvas);
+    let mut board = BoardBuilder::gen_starting_pos();
+    let mut board_renderer = BoardRenderer::new(Vec2u::fill(8), field_size, color_theme, &board);
 
 
     let mut turn = Side::White;
@@ -95,27 +97,28 @@ fn main() -> Result<(), String> {
 
         let cursor_field = (inputs.mouse_pos / field_size).vec_into();
         board_renderer.hover(cursor_field);
-        board_renderer.render(&mut renderer);
+        board_renderer.render(&turn, &mut renderer);
         renderer.render();
-        /*board.hover(i);
+  
 
         if inputs.pressed(Control::Escape) {
-            board.unselect();
+            board_renderer.unselect();
         }
 
 
         if inputs.left_click {
-            if board.selected.is_none() {
+            board_renderer.select(cursor_field);
+            /*if board.selected.is_none() {
                 board.select(i, turn);
             } else if board.move_figure(i) {
                 turn = match turn {
                     Side::Black => Side::White,
                     Side::White => Side::Black,
                 }
-            }
+            }*/
         }
         
-
+        /* 
 
 
         board.draw(&mut canvas, turn, dt);

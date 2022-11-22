@@ -175,95 +175,112 @@ impl Board {
 
 }
 
-
-fn gen_starting_pos() -> Board {
-    let mut board = vec![vec![None; 8]; 8];
-
-
-    //gen black
-    let mut side = Side::Black;
-    //pawns
-    for x in 0..=7 {
-        board[x][1] = Some(Piece::new(PieceType::Pawn, side));
+pub struct BoardBuilder {}
+impl BoardBuilder {
+    pub fn gen_starting_pos() -> Board {
+        let mut board = vec![vec![None; 8]; 8];
+    
+    
+        //gen black
+        let mut side = Side::Black;
+        //pawns
+        for x in 0..=7 {
+            board[x][1] = Some(Piece::new(PieceType::Pawn, side));
+        }
+    
+        //rooks
+        board[0][0] = Some(Piece::new(PieceType::Rook, side));
+        board[7][0] = Some(Piece::new(PieceType::Rook, side));
+    
+        //knights
+        board[1][0] = Some(Piece::new(PieceType::Knight, side));
+        board[6][0] = Some(Piece::new(PieceType::Knight, side));
+    
+        //bishops
+        board[2][0] = Some(Piece::new(PieceType::Bishop, side));
+        board[5][0] = Some(Piece::new(PieceType::Bishop, side));
+    
+        //king & queen
+        board[3][0] = Some(Piece::new(PieceType::Queen, side));
+        board[4][0] = Some(Piece::new(PieceType::King, side));
+    
+        //gen white
+        side = Side::White;
+        //pawns
+        for x in 0..=7 {
+            board[x][6] = Some(Piece::new(PieceType::Pawn, side));
+        }
+    
+        //rooks
+        board[0][7] = Some(Piece::new(PieceType::Rook, side));
+        board[7][7] = Some(Piece::new(PieceType::Rook, side));
+    
+        //knights
+        board[1][7] = Some(Piece::new(PieceType::Knight, side));
+        board[6][7] = Some(Piece::new(PieceType::Knight, side));
+    
+        //bishops
+        board[2][7] = Some(Piece::new(PieceType::Bishop, side));
+        board[5][7] = Some(Piece::new(PieceType::Bishop, side));
+    
+        //king & queen
+        board[3][7] = Some(Piece::new(PieceType::Queen, side));
+        board[4][7] = Some(Piece::new(PieceType::King, side));
+    
+        Board {
+            white_castling_possible: (false, false),
+            black_castling_possible: (false, false),
+            en_passant_possible: None,
+            board,
+            size: Vec2u::fill(8),
+            pawn_start_y: (1,6),
+            beaten_figures: Vec::new(),
+        }
     }
+}
 
-    //rooks
-    board[0][0] = Some(Piece::new(PieceType::Rook, side));
-    board[7][0] = Some(Piece::new(PieceType::Rook, side));
+pub struct ColorTheme {
+    board_primary: Color,
+    board_secondary: Color,
+}
 
-    //knights
-    board[1][0] = Some(Piece::new(PieceType::Knight, side));
-    board[6][0] = Some(Piece::new(PieceType::Knight, side));
-
-    //bishops
-    board[2][0] = Some(Piece::new(PieceType::Bishop, side));
-    board[5][0] = Some(Piece::new(PieceType::Bishop, side));
-
-    //king & queen
-    board[3][0] = Some(Piece::new(PieceType::Queen, side));
-    board[4][0] = Some(Piece::new(PieceType::King, side));
-
-    //gen white
-    side = Side::White;
-    //pawns
-    for x in 0..=7 {
-        board[x][7] = Some(Piece::new(PieceType::Pawn, side));
-    }
-
-    //rooks
-    board[0][7] = Some(Piece::new(PieceType::Rook, side));
-    board[7][7] = Some(Piece::new(PieceType::Rook, side));
-
-    //knights
-    board[1][7] = Some(Piece::new(PieceType::Knight, side));
-    board[6][7] = Some(Piece::new(PieceType::Knight, side));
-
-    //bishops
-    board[2][7] = Some(Piece::new(PieceType::Bishop, side));
-    board[5][7] = Some(Piece::new(PieceType::Bishop, side));
-
-    //king & queen
-    board[3][7] = Some(Piece::new(PieceType::Queen, side));
-    board[4][7] = Some(Piece::new(PieceType::King, side));
-
-    Board {
-        white_castling_possible: (false, false),
-        black_castling_possible: (false, false),
-        en_passant_possible: None,
-        board,
-        size: Vec2u::fill(8),
-        pawn_start_y: (1,6),
-        beaten_figures: Vec::new(),
+impl ColorTheme {
+    pub fn new(board_primary: Color, board_secondary: Color) -> Self {
+        Self {board_primary, board_secondary}
     }
 }
 
 
-pub struct BoardRenderer {
+
+pub struct BoardRenderer<'a> {
     board_ground: Vec<(Rect, Color)>,
     hovering: Option<Vec2i>,
+    field_size: u32,
+    color_theme: ColorTheme,
     selected: Option<Vec2i>,
     valid_mvs_tick: f32,
-    last_move_tick: f32
+    last_move_tick: f32,
+    board: &'a Board,
 }
 
 
-impl BoardRenderer {
-    pub fn new(size: Vec2u) -> Self {
+impl<'a> BoardRenderer<'a> {
+    pub fn new(size: Vec2u, field_size: u32, color_theme: ColorTheme, board: &'a Board) -> Self {
         let mut board_ground: Vec<(Rect, Color)> = Vec::new();
         let mut color = Color::WHITE;
-        for i in 0..8 {
-            for n in 0..8 {
-                let rect = Rect::new(50 * i, 50 * n, 50, 50);
-                if (i % 2 == 1 && n % 2 == 0) || (i % 2 == 0 && n % 2 == 1) {
+        for x in 0..(board.size.x as i32) {
+            for y in 0..(board.size.y as i32) {
+                let rect = Rect::new(field_size as i32 * x, field_size as i32 * y, field_size, field_size);
+                if (x % 2 == 1 && y % 2 == 0) || (x % 2 == 0 && y % 2 == 1) {
                     //color = black
-                    color = Color::BLACK;
+                    color = color_theme.board_secondary;
                 } else {
-                    color = Color::WHITE;
+                    color = color_theme.board_primary;
                 }
                 board_ground.push((rect, color));
             }
         }
-        Self {board_ground, hovering: None, selected: None, valid_mvs_tick: 0.0, last_move_tick: 0.0 }
+        Self {board_ground, hovering: None, selected: None, valid_mvs_tick: 0.0, last_move_tick: 0.0 , field_size, color_theme, board}
     }
 
     pub fn hover(&mut self, pos: Vec2i) {
@@ -271,10 +288,51 @@ impl BoardRenderer {
     }
 
 
-    pub fn render(&mut self, renderer: &mut Renderer) {
+    pub fn render(&mut self, turn: &Side, renderer: &mut Renderer) {
         for rect in &self.board_ground {
             renderer.draw_rect(rect.0, rect.1);
         }
+
+        for (x, y_row) in  self.board.board.iter().enumerate() {
+            for (y, optional_piece) in y_row.iter().enumerate() {
+                //dont draw selection
+                if let Some(selected) = self.selected {
+                    if selected.x == x as i32 && selected.y == y as i32{
+                        continue;
+                    }
+                }
+
+                if let Some(piece) = optional_piece {
+                    let mut pos = Vec2i::new((x as u32 * self.field_size) as i32, (y as u32 * self.field_size) as i32);
+                    let mut size = self.field_size;
+                    //hovering expands piece
+                    if let Some(hover_pos) = self.hovering{
+                        if &piece.side == turn && hover_pos.x == x as i32 && hover_pos.y == y as i32{
+                            pos -= 5;
+                            size += 10;
+                        }
+                    }
+
+                    renderer.draw_image(
+                        piece.ty,
+                        piece.side,
+                        Rect::new(pos.x,pos.y, size, size))           
+                }
+            }
+        }
         self.hovering = None
     }
+
+    pub fn unselect(&mut self) {
+        self.selected = None
+    }
+
+    pub fn select(&mut self, cursor_field: Vec2i) -> Option<Piece> {
+        let selection = self.board.get_piece_at_pos(cursor_field);
+        if selection.is_some() {
+            self.selected = Some(cursor_field);
+        }
+        selection
+    }
+
 }
