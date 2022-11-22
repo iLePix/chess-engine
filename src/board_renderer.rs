@@ -14,7 +14,8 @@ pub struct BoardRenderer {
     pub selected: Option<Vec2i>,
     valid_mvs_tick: f32,
     last_move_tick: f32,
-    animation_increment: f32
+    animation_increment: f32,
+    last_move: Option<(Vec2i, Vec2i)>
 }
 
 
@@ -34,7 +35,7 @@ impl BoardRenderer {
                 board_ground.push((rect, color));
             }
         }
-        Self {board_ground, hovering: None, selected: None, valid_mvs_tick: 0.0, last_move_tick: 0.0 , field_size, color_theme, animation_increment}
+        Self {board_ground, hovering: None, selected: None, valid_mvs_tick: 0.0, last_move_tick: 0.0 , field_size, color_theme, animation_increment, last_move: None}
     }
 
     pub fn hover(&mut self, pos: Vec2i) {
@@ -49,6 +50,29 @@ impl BoardRenderer {
 
         for (x, y_row) in  board.board.iter().enumerate() {
             for (y, optional_piece) in y_row.iter().enumerate() {
+                    //draw last move 
+                if let Some(last_move) = board.last_move {
+                    if self.last_move_tick < self.field_size as f32 * 0.8 {
+                        self.last_move_tick += self.animation_increment * dt;
+                    } else {
+                        self.last_move_tick = self.field_size as f32 * 0.8
+                    }
+                    let mut draw_move = |mv: Vec2i| {
+                        if mv == Vec2i::new(x as i32, y as i32) {
+                            let r_size = Vec2u::fill(self.last_move_tick as u32);
+                            let color = self.color_theme.last_move;
+                            let r_center = Vec2i::new(x as i32,y as i32) * self.field_size as i32 + Vec2i::fill(self.field_size as i32 / 2);
+                            let rect = Rect::from_center(Point::new(r_center.x, r_center.y), r_size.x, r_size.y);
+                            renderer.draw_rect(rect, color, 3)
+                        }
+                    };
+                    draw_move(last_move.0);
+                    draw_move(last_move.1);
+                }
+                if board.last_move != self.last_move {
+                    self.last_move_tick = 0.0;
+                    self.last_move = board.last_move
+                }
                 //dont draw selection
                 let field_pos = Vec2i::new(x as i32,y as i32);
                 if let Some(selected) = self.selected {
@@ -80,17 +104,6 @@ impl BoardRenderer {
                     self.valid_mvs_tick = 0.0;
                 }
 
-                //draw last movie 
-                if let Some(last_move) = board.last_move {
-                    let mut draw_move = |mv: Vec2i| {
-                        if mv == Vec2i::new(x as i32, y as i32) {
-                            let rect = Rect::new(x as i32 * self.field_size as i32, y as i32 * self.field_size as i32, self.field_size, self.field_size);
-                            renderer.draw_rect(rect, Color::YELLOW, 3)
-                        }
-                    };
-                    draw_move(last_move.0);
-                    draw_move(last_move.1);
-                }
 
 
 
@@ -103,7 +116,7 @@ impl BoardRenderer {
                     
                     //draw check indicator
                     if piece.ty == PieceType::King {
-                        let color = Color::RGB(164, 0, 0);
+                        let color = self.color_theme.check;
                         let rect = Rect::new(window_pos.x,window_pos.y, size, size);
                         if board.check.0 && piece.side == Side::White {
                             renderer.draw_rect(rect, color, 1);

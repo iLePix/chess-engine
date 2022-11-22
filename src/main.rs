@@ -60,9 +60,11 @@ fn main() -> Result<(), String> {
     let board_size = Vec2u::fill(8);
     let color_theme = ColorTheme {
         board_primary: Color::WHITE,
-        board_secondary: Color::BLUE,
+        board_secondary: Color::RGB(13,56,166),
         valid_moves: Color::RGBA(3, 138, 255, 128),
-        selection: Color::RGBA(255, 123, 98, 200)
+        selection: Color::RGBA(255, 123, 98, 200),
+        last_move: Color::RGB(199,232,172),
+        check: Color::RGB(230,55,96)
     };
     let mut renderer = Renderer::new(&tex_atlas, 200.0, &mut canvas);
     let mut turn = Side::White;
@@ -75,6 +77,7 @@ fn main() -> Result<(), String> {
     let mut last_frame_time = Instant::now();
     let mut s_tick = 0.0;
     let s_tick_increment = 200.0;
+
 
     'running: loop {
         let current_frame_time = Instant::now();
@@ -159,51 +162,7 @@ fn main() -> Result<(), String> {
 
         renderer.render();
 
-        /*if let Some(f) = board.get_selected_fig() {
-            if s_tick + s_tick_increment*dt >= 255.0 {
-                s_tick = 0.0;
-            } else {
-                s_tick += dt * s_tick_increment as f32;
-            }
 
-            let p = (parabola(s_tick as i32) / 20.0);
-            let size = 50 + p as u32;
-            let src = tex_atlas.figure_atlas_cords.get(&f.tex_id)
-                    .unwrap_or_else(|| panic!("Created figure with wrong tex-index {}", f.tex_id));
-            let dst = Rect::from_center(Point::new(inputs.mouse_pos.x as i32 , inputs.mouse_pos.y as i32), size, size);
-            canvas.copy(tex_atlas.pieces_texture, *src, dst).unwrap();
-          } else {
-            s_tick = 0.0;
-        }*/
-
-
-        
-        /* 
-
-
-        board.draw(&mut canvas, turn, dt);
-
-        //promoting(screen_size, Side::White, &mut canvas, &tex_atlas);
-
-        if let Some(f) = board.get_selected_fig() {
-            if s_tick + s_tick_increment*dt >= 255.0 {
-                s_tick = 0.0;
-            } else {
-                s_tick += dt * s_tick_increment as f32;
-            }
-
-            let p = (parabola(s_tick as i32) / 20.0);
-            let size = 50 + p as u32;
-            let src = tex_atlas.figure_atlas_cords.get(&f.tex_id)
-                    .unwrap_or_else(|| panic!("Created figure with wrong tex-index {}", f.tex_id));
-            let dst = Rect::from_center(Point::new(inputs.mouse_pos.x as i32 , inputs.mouse_pos.y as i32), size, size);
-            canvas.copy(tex_atlas.pieces_texture, *src, dst).unwrap();
-          } else {
-            s_tick = 0.0;
-        }*/
-
-    
-        
         use sdl2::mouse::MouseButton::*;
         inputs.mouse_up(Left);
         inputs.mouse_up(Right);
@@ -213,6 +172,11 @@ fn main() -> Result<(), String> {
     Ok(())
 }
 
+enum GameState {
+    Running,
+    Winner(Side),
+    Draw
+}
 
 
 fn parabola(x: i32) -> f32 {

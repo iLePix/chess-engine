@@ -284,7 +284,7 @@ impl Board {
     }
 
     fn move_piece(&mut self, pos: &Vec2i, dst: &Vec2i, turn: Side) {
-        if let Some(piece) = self.get_piece_at_pos(pos) {
+        if let Some(mut piece) = self.get_piece_at_pos(pos) {
             //if there is a figure at the dst
             if let Some(dst_piece) = self.get_piece_at_pos(dst) {
                 self.captured_pieces.push(dst_piece);
@@ -329,6 +329,9 @@ impl Board {
                     }
                     if (pos.y - dst.y).abs() > 1 {
                         self.en_passant_possible = Some(*dst);
+                    }
+                    if dst.y == 0 || dst.y == 7 {
+                        piece = Piece::new(PieceType::Queen, turn);
                     }
                 },
                 _ => {self.en_passant_possible = None}
@@ -429,11 +432,13 @@ pub struct ColorTheme {
     pub board_primary: Color,
     pub board_secondary: Color,
     pub valid_moves: Color,
-    pub selection: Color
+    pub selection: Color,
+    pub check: Color,
+    pub last_move: Color
 }
 
 impl ColorTheme {
-    pub fn new(board_primary: Color, board_secondary: Color,   valid_moves: Color, selection: Color) -> Self {
-        Self {board_primary, board_secondary, valid_moves, selection}
+    pub fn new(board_primary: Color, board_secondary: Color,   valid_moves: Color, selection: Color, check: Color, last_move: Color) -> Self {
+        Self {board_primary, board_secondary, valid_moves, selection, check, last_move}
     }
 }
