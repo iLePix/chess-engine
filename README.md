@@ -8,7 +8,7 @@ Still missing
 - [x] check & check-mate
 - [x] castling in both direction
 - [x] King can currently castle through, even if castling-way is checked!!
-- [] drag & drop
+- [ ] drag & drop
 
 
 How to run:
@@ -23,4 +23,4 @@ At home:
 Multiplayer:
 * cargo run 81.169.212.158:1337
 
-Press 'C' for switching color theme
+Press 'C' for switching color theme 
