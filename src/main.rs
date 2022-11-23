@@ -6,10 +6,13 @@ pub mod macros;
 pub mod atlas;
 pub mod renderer;
 pub mod board_renderer;
+pub mod dtos;
 
 use atlas::TextureAtlas;
+use binverse::error::BinverseError;
 use board::{Board, ColorTheme, gen_starting_pos, gen_kings_pos};
 use board_renderer::BoardRenderer;
+use dtos::{PlayerInfo, Move, GameInfo};
 use pieces::{Piece, Side};
 use input::InputHandler;
 use renderer::Renderer;
@@ -19,7 +22,9 @@ use sdl2::keyboard::{Keycode, Mod};
 use sdl2::{rect::{Rect, Point}, pixels::Color, render::{Canvas, Texture}, video::Window, sys::PropModePrepend};
 use vecm::vec::{Vec2i, Vec2u, Vec2, VecInto};
 
+use std::net::TcpStream;
 use std::path::Path;
+use std::sync::mpsc::{self, TryRecvError};
 //use world::celo::Celo;
 use std::time::{Duration, Instant};
 
@@ -28,12 +33,45 @@ mod input;
 
 use crate::input::Control;
 
+fn receive_mvs(mut tcp_stream: TcpStream, moves: mpsc::Sender<Move>) -> Result<(), BinverseError> {
+    loop {
+        moves.send(dtos::recv(&mut tcp_stream)?).unwrap();
+    }
+}
+
+struct MultiplayerUtils {
+    tcp_stream: TcpStream,
+    moves_rx: mpsc::Receiver<Move>,
+    my_side: Side,
+}
 
 
 fn main() -> Result<(), String> {
+    let mut args = std::env::args().skip(1);
+    let mut player_name = String::new();
+    
+    let mut mp_utils = args.next().map(|ip|  {
+        println!("Type in your name: ");
+        std::io::stdin().read_line(&mut player_name).expect("Failed to read playername");
+        player_name = player_name.trim().to_owned();
+        let mut tcp_stream = TcpStream::connect(ip).expect("Couldnt connect");
+        dtos::send(&mut tcp_stream, PlayerInfo { name: player_name }).expect("Couldnt sent player_info");
+        let game_info: GameInfo = dtos::recv(&mut tcp_stream).expect("Didnt get player_info");
+        let my_side = if game_info.is_black { Side::Black } else { Side::White };
+        println!("Your Enemy has connected: {}", game_info.other_player);
+
+        
+        let tcp_stream_clone = tcp_stream.try_clone().unwrap();
+        let (sender, rx) = mpsc::channel();
+    
+        std::thread::spawn(|| receive_mvs(tcp_stream_clone, sender));
+        MultiplayerUtils { tcp_stream, moves_rx: rx, my_side}
+    });
+
     let sdl_context = sdl2::init()?;
     let video_subsystem = sdl_context.video()?;
     let _image_context = sdl2::image::init(InitFlag::PNG | InitFlag::JPG)?;
+
 
     let window = video_subsystem.window("Chess", 400, 400)
         //.resizable()
@@ -126,23 +164,72 @@ fn main() -> Result<(), String> {
             board_renderer.unselect();
         }
 
+        let mut change_turn = |turn: &mut Side| {
+            *turn = match turn {
+                Side::Black => Side::White,
+                Side::White => Side::Black,
+            };
+        };
 
-        if inputs.left_click {
-            if board_renderer.selected.is_none() {
-                board_renderer.select(cursor_field, turn, &board);
-            } else if board.make_move(&board_renderer.selected.unwrap(), &cursor_field, turn) {
-                board_renderer.unselect();
-                turn = match turn {
-                    Side::Black => Side::White,
-                    Side::White => Side::Black,
-                };
-            } else if cursor_field == board_renderer.selected.unwrap() {
-                board_renderer.unselect();
+
+        if let Some(mp_utils) = &mut mp_utils {
+            if inputs.left_click {
+                if board_renderer.selected.is_none() {
+                    board_renderer.select(cursor_field, turn, &board);
+                } else if let Some(selected) = board_renderer.selected && mp_utils.my_side == turn && board.make_move(&selected, &cursor_field, turn) {
+                    //broadcast move
+                    dtos::send(
+                        &mut mp_utils.tcp_stream, 
+                        Move {
+                            x1: selected.x as i8,
+                            y1: 7 - selected.y as i8,
+                            x2:  cursor_field.x as i8,
+                            y2: 7 - cursor_field.y as i8
+                        }
+                    ).expect("Could not send move");
+                    board_renderer.unselect();
+                    change_turn(&mut turn);
+                } else if cursor_field == board_renderer.selected.unwrap() {
+                    board_renderer.unselect();
+                }
             }
+
+
+            if mp_utils.my_side != turn {
+                match mp_utils.moves_rx.try_recv() {
+                    Ok(new_move) => {
+                        println!("Receiving move {:?} for {:?}", new_move, turn);
+                        if !board.make_move(&Vec2i::new(new_move.x1 as i32, 7 - new_move.y1 as i32), &Vec2i::new(new_move.x2 as i32, 7 - new_move.y2 as i32), turn) {
+                            println!("Opponent move not accepted");
+                        }
+                        change_turn(&mut turn);
+                    },
+                    Err(TryRecvError::Empty) => {},
+                    Err(TryRecvError::Disconnected) => panic!("Disconnected"),
+                }
+            }
+
+            board_renderer.hover(cursor_field);
+            board_renderer.render(&mp_utils.my_side, &board, &mut renderer, dt);
+
+        } else {
+            if inputs.left_click {
+                if board_renderer.selected.is_none() {
+                    board_renderer.select(cursor_field, turn, &board);
+                } else if board.make_move(&board_renderer.selected.unwrap(), &cursor_field, turn) {
+                    board_renderer.unselect();
+                    turn = match turn {
+                        Side::Black => Side::White,
+                        Side::White => Side::Black,
+                    };
+                } else if cursor_field == board_renderer.selected.unwrap() {
+                    board_renderer.unselect();
+                }
+            }
+            board_renderer.hover(cursor_field);
+            board_renderer.render(&turn, &board, &mut renderer, dt);
         }
 
-        board_renderer.hover(cursor_field);
-        board_renderer.render(&turn, &board, &mut renderer, dt);
 
         if let Some(piece) = board_renderer.get_selected_piece(&board) {
             if s_tick + s_tick_increment*dt >= 255.0 {

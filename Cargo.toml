@@ -8,3 +8,5 @@ edition = "2021"
 [dependencies]
 sdl2 = {version="0.35.1", features=["image"]}
 vecm = {git = "https://github.com/LinusDikomey/vecm"}
+binverse = "0.6.2"
+binverse_derive = "0.6.2"
