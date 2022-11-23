@@ -1,11 +1,10 @@
 Still missing
 
 - [x] en passant is still missing and opponent moving cycles
-- [ ] 50 move rule, 3-fold repetition need to be implemented
+- [ ] 50 move rule, 3-fold repetition need to be implemented // safe all moves
 - [x] draws in general
 - [ ] premoving
-- [ ] promoting
+- [x] promoting, kinda just for queen
 - [x] check & check-mate
 - [x] castling in both direction
-
-- [ ] King can currently castle through, even if castling-way is checked!!
+- [x] King can currently castle through, even if castling-way is checked!!
