@@ -9,3 +9,4 @@ Still missing
 - [x] castling in both direction
 - [x] King can currently castle through, even if castling-way is checked!!
 - [] drag & drop
+online: cargo run 81.169.212.158:1337
