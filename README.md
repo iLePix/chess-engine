@@ -16,6 +16,9 @@ How to run:
 Add this line to: ~/.zshenv or ~/.bash_profile, depending on wether u use zsh or bash
 * export LIBRARY_PATH="$LIBRARY_PATH:$(brew --prefix)/lib"
 
+Install Rust &
+* rustup default nightly
+
 At home:
 * cargo run
 
