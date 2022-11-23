@@ -44,7 +44,7 @@ impl Board {
         Self {board, size, pawn_start_y, valid_moves: HashMap::new(), white_castle: Castle::new(), black_castle: Castle::new(), en_passant_possible, captured_pieces: Vec::new(), check: (false, false), last_move: None}
     }
 
-    fn valid_moves_for_piece(&self, piece_pos: Vec2i, turn: Side) -> HashSet<Vec2i> {
+    fn valid_moves_for_piece(&self, piece_pos: Vec2i, turn: Side, from_castling_check: bool) -> HashSet<Vec2i> {
         let mut valid_moves: HashSet<Vec2i> = HashSet::new();
         let piece = self.get_piece_at_pos(&piece_pos).expect("Tried to calculate possible moves for nonexisiting pieces");
         
@@ -120,22 +120,31 @@ impl Board {
             }
 
             let castle = |y: i32, castle: Castle, valid_mvs: &mut HashSet<Vec2i>| {
-                if castle.long && self.space_is_empty(Vec2i::new(1,y), Vec2i::new(3,y)) {
+                //for long: x = 2,3 for short: x = 5,6 / check for check
+                if 
+                    castle.long && 
+                    self.space_is_empty(Vec2i::new(1,y), Vec2i::new(3,y)) && 
+                    (2..=3).all(|x| !self.threathens(&Vec2i::new(x,y), turn, true))
+                {
                     valid_mvs.insert(Vec2i::new(2,y));
                 }
-                if castle.short && self.space_is_empty(Vec2i::new(5,y), Vec2i::new(6,y)) {
+                if  castle.short && 
+                    self.space_is_empty(Vec2i::new(5,y), Vec2i::new(6,y)) &&
+                    (5..=6).all(|x| !self.threathens(&Vec2i::new(x,y), turn, true))
+                {
                     valid_mvs.insert(Vec2i::new(6,y));
                 }
             };
 
-
-            match piece.side {
-                Side::Black => {
-                    castle(0, self.black_castle, valid_mvs);
-                },
-                Side::White => {
-                    castle(7, self.white_castle, valid_mvs);
-                },
+            if !from_castling_check {
+                match piece.side {
+                    Side::Black => {
+                        castle(0, self.black_castle, valid_mvs);
+                    },
+                    Side::White => {
+                        castle(7, self.white_castle, valid_mvs);
+                    },
+                }
             }
         };
 
@@ -189,7 +198,7 @@ impl Board {
         let mut board_copy = self.clone();
         board_copy.move_piece(pos, dst, side);
         let king_pos = board_copy.find_king(side).expect("No king found");
-        board_copy.threathens(&king_pos)
+        board_copy.threathens(&king_pos, side, false)
     }
 
 
@@ -204,14 +213,13 @@ impl Board {
         None
     }
 
-    fn threathens(&self, victim_pos: &Vec2i) -> bool {
-        let victim_piece = self.get_piece_at_pos(victim_pos).unwrap();
+    fn threathens(&self, victim_pos: &Vec2i, victim_side: Side, from_castling_check: bool) -> bool {
         for x in 0..self.size.x {
             for y in 0..self.size.y {
                 let piece_pos = Vec2i::new(x as i32 , y as i32);
                 if let Some(piece) = self.get_piece_at_pos(&piece_pos) {
-                    if victim_piece.side != piece.side {
-                        let moves = self.valid_moves_for_piece(piece_pos, piece.side);
+                    if victim_side != piece.side {
+                        let moves = self.valid_moves_for_piece(piece_pos, piece.side, from_castling_check);
                         if moves.contains(&victim_pos) {
                             return true;
                         }
@@ -237,7 +245,7 @@ impl Board {
             for (y, optional_piece) in y_row.iter().enumerate() {
                 if optional_piece.is_some() && optional_piece.unwrap().side == turn {
                     let pos = Vec2i::new(x as i32, y as i32);
-                    let mut mvs = self.valid_moves_for_piece(pos, turn);
+                    let mut mvs = self.valid_moves_for_piece(pos, turn, false);
                     total_moves_pre_check += mvs.len();
                     mvs.drain_filter(|to_pos| self.is_check_after(&pos, to_pos, turn));
                     if !mvs.is_empty() {
@@ -274,7 +282,7 @@ impl Board {
     pub fn is_check(&self) -> (bool, bool) {
         let white_king = self.find_king(Side::White).expect("No white king found");
         let black_king = self.find_king(Side::Black).expect("No black king found");
-        (self.threathens(&white_king), self.threathens(&black_king))
+        (self.threathens(&white_king, Side::White, false), self.threathens(&black_king, Side::Black, false))
     }
 
     pub fn set_piece(&mut self, piece: Piece, pos: &Vec2i) {
@@ -348,7 +356,7 @@ impl Board {
             let rook = self.get_piece_at_pos(&Vec2i::new(0,y)).expect("Couldnt find castling tower");
             self.set_piece(rook, &Vec2i::new(3,y));
             self.remove_piece(&Vec2i::new(0,y));
-        } else if *dst == Vec2i::new(2, y) && castle.short {
+        } else if *dst == Vec2i::new(6, y) && castle.short {
             let rook = self.get_piece_at_pos(&Vec2i::new(7,y)).expect("Couldnt find castling tower");
             self.set_piece(rook, &Vec2i::new(5,y));
             self.remove_piece(&Vec2i::new(7,y));

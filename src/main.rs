@@ -54,6 +54,7 @@ fn main() -> Result<(), String> {
         println!("Type in your name: ");
         std::io::stdin().read_line(&mut player_name).expect("Failed to read playername");
         player_name = player_name.trim().to_owned();
+        println!("Waiting for opponent");
         let mut tcp_stream = TcpStream::connect(ip).expect("Couldnt connect");
         dtos::send(&mut tcp_stream, PlayerInfo { name: player_name }).expect("Couldnt sent player_info");
         let game_info: GameInfo = dtos::recv(&mut tcp_stream).expect("Didnt get player_info");
@@ -172,10 +173,26 @@ fn main() -> Result<(), String> {
         };
 
 
+        /*if inputs.left_click {
+            if board_renderer.selected.is_none() {
+                board_renderer.select(cursor_field, turn, &board);
+            } else if let Some(selected) = board_renderer.selected && board.make_move(&selected, &cursor_field, turn) {
+                board_renderer.unselect();
+                change_turn(&mut turn);
+            } else if cursor_field == board_renderer.selected.unwrap() {
+                board_renderer.unselect();
+            }
+        }*/
+
+
+
+        
+
+        
         if let Some(mp_utils) = &mut mp_utils {
             if inputs.left_click {
                 if board_renderer.selected.is_none() {
-                    board_renderer.select(cursor_field, turn, &board);
+                    board_renderer.select(cursor_field, mp_utils.my_side, &board);
                 } else if let Some(selected) = board_renderer.selected && mp_utils.my_side == turn && board.make_move(&selected, &cursor_field, turn) {
                     //broadcast move
                     dtos::send(
@@ -193,14 +210,12 @@ fn main() -> Result<(), String> {
                     board_renderer.unselect();
                 }
             }
-
-
             if mp_utils.my_side != turn {
                 match mp_utils.moves_rx.try_recv() {
                     Ok(new_move) => {
                         println!("Receiving move {:?} for {:?}", new_move, turn);
                         if !board.make_move(&Vec2i::new(new_move.x1 as i32, 7 - new_move.y1 as i32), &Vec2i::new(new_move.x2 as i32, 7 - new_move.y2 as i32), turn) {
-                            println!("Opponent move not accepted");
+                            panic!("Opponent move not accepted");
                         }
                         change_turn(&mut turn);
                     },
@@ -208,7 +223,6 @@ fn main() -> Result<(), String> {
                     Err(TryRecvError::Disconnected) => panic!("Disconnected"),
                 }
             }
-
             board_renderer.hover(cursor_field);
             board_renderer.render(&mp_utils.my_side, &board, &mut renderer, dt);
 
@@ -218,10 +232,7 @@ fn main() -> Result<(), String> {
                     board_renderer.select(cursor_field, turn, &board);
                 } else if board.make_move(&board_renderer.selected.unwrap(), &cursor_field, turn) {
                     board_renderer.unselect();
-                    turn = match turn {
-                        Side::Black => Side::White,
-                        Side::White => Side::Black,
-                    };
+                    change_turn(&mut turn);
                 } else if cursor_field == board_renderer.selected.unwrap() {
                     board_renderer.unselect();
                 }

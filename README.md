@@ -7,3 +7,5 @@ Still missing
 - [ ] promoting
 - [x] check & check-mate
 - [x] castling in both direction
+
+- [ ] King can currently castle through, even if castling-way is checked!!
