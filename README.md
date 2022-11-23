@@ -8,3 +8,4 @@ Still missing
 - [x] check & check-mate
 - [x] castling in both direction
 - [x] King can currently castle through, even if castling-way is checked!!
+- [] drag & drop
