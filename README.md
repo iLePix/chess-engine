@@ -8,3 +8,5 @@ Still missing
 - [x] check & check-mate
 - [x] castling in both direction
 - [x] King can currently castle through, even if castling-way is checked!!
+
+online: cargo run 81.169.212.158:1337
