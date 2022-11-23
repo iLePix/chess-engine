@@ -9,4 +9,18 @@ Still missing
 - [x] castling in both direction
 - [x] King can currently castle through, even if castling-way is checked!!
 - [] drag & drop
-online: cargo run 81.169.212.158:1337
+
+
+How to run:
+* brew install sdl2
+Add this line to: ~/.zshenv or ~/.bash_profile, depending on wether u use zsh or bash
+* export LIBRARY_PATH="$LIBRARY_PATH:$(brew --prefix)/lib"
+
+At home:
+* cargo run
+
+
+Multiplayer:
+* cargo run 81.169.212.158:1337
+
+Press 'C' for switching color theme
