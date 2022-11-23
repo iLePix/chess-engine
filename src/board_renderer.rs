@@ -6,11 +6,11 @@ use crate::{board::{Board, ColorTheme}, renderer::Renderer, pieces::{Side, Piece
 
 
 
-pub struct BoardRenderer {
+pub struct BoardRenderer<'a> {
     board_ground: Vec<(Rect, Color)>,
     hovering: Option<Vec2i>,
     field_size: u32,
-    color_theme: ColorTheme,
+    color_theme: &'a ColorTheme,
     pub selected: Option<Vec2i>,
     valid_mvs_tick: f32,
     last_move_tick: f32,
@@ -19,8 +19,8 @@ pub struct BoardRenderer {
 }
 
 
-impl BoardRenderer {
-    pub fn new(field_size: u32, color_theme: ColorTheme, size: Vec2u, animation_increment: f32) -> Self {
+impl<'a>  BoardRenderer<'a> {
+    pub fn new(field_size: u32, color_theme: &'a ColorTheme, size: Vec2u, animation_increment: f32) -> Self {
         let mut board_ground: Vec<(Rect, Color)> = Vec::new();
         let mut color;
         for x in 0..(size.x as i32) {
@@ -52,22 +52,21 @@ impl BoardRenderer {
             for (y, optional_piece) in y_row.iter().enumerate() {
                     //draw last move 
                 if let Some(last_move) = board.last_move {
-                    if self.last_move_tick < self.field_size as f32 * 0.8 {
+                    if self.last_move_tick < self.field_size as f32 {
                         self.last_move_tick += self.animation_increment * dt;
                     } else {
-                        self.last_move_tick = self.field_size as f32 * 0.8
+                        self.last_move_tick = self.field_size as f32
                     }
-                    let mut draw_move = |mv: Vec2i| {
+                    let mut draw_move = |mv: Vec2i, color: Color| {
                         if mv == Vec2i::new(x as i32, y as i32) {
                             let r_size = Vec2u::fill(self.last_move_tick as u32);
-                            let color = self.color_theme.last_move;
                             let r_center = Vec2i::new(x as i32,y as i32) * self.field_size as i32 + Vec2i::fill(self.field_size as i32 / 2);
                             let rect = Rect::from_center(Point::new(r_center.x, r_center.y), r_size.x, r_size.y);
                             renderer.draw_rect(rect, color, 3)
                         }
                     };
-                    draw_move(last_move.0);
-                    draw_move(last_move.1);
+                    draw_move(last_move.0, self.color_theme.last_move_primary);
+                    draw_move(last_move.1, self.color_theme.last_move_secondary);
                 }
                 if board.last_move != self.last_move {
                     self.last_move_tick = 0.0;
@@ -156,6 +155,27 @@ impl BoardRenderer {
             return board.get_piece_at_pos(&selected)
         }
         None
+    }
+
+    pub fn update_color_theme(&mut self, color_theme: &'a ColorTheme) {
+        let mut board_ground: Vec<(Rect, Color)> = Vec::new();
+        let mut color;
+        let field_size = self.field_size;
+        let size = Vec2u::fill(8);
+        for x in 0..(size.x as i32) {
+            for y in 0..(size.y as i32) {
+                let rect = Rect::new(field_size as i32 * x, field_size as i32 * y, field_size, field_size);
+                if (x % 2 == 1 && y % 2 == 0) || (x % 2 == 0 && y % 2 == 1) {
+                    //color = black
+                    color = color_theme.board_secondary;
+                } else {
+                    color = color_theme.board_primary;
+                }
+                board_ground.push((rect, color));
+            }
+        }
+        self.board_ground = board_ground;
+        self.color_theme = color_theme;
     }
 
     pub fn select(&mut self, cursor_field: Vec2i, turn: Side, board: &Board) -> Option<Piece> {

@@ -58,7 +58,8 @@ key_mappings! {
     Down => S,
     Left => A,
     Right => D,
-    Escape => Escape
+    Escape => Escape,
+    Color => C
   press:
     ZoomIn => Plus,
     ZoomOut => Minus

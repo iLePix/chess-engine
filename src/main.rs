@@ -23,6 +23,7 @@ use sdl2::{rect::{Rect, Point}, pixels::Color, render::{Canvas, Texture}, video:
 use vecm::vec::{Vec2i, Vec2u, Vec2, VecInto};
 
 use std::net::TcpStream;
+use std::ops::Add;
 use std::path::Path;
 use std::sync::mpsc::{self, TryRecvError};
 //use world::celo::Celo;
@@ -60,6 +61,7 @@ fn main() -> Result<(), String> {
         let game_info: GameInfo = dtos::recv(&mut tcp_stream).expect("Didnt get player_info");
         let my_side = if game_info.is_black { Side::Black } else { Side::White };
         println!("Your Enemy has connected: {}", game_info.other_player);
+        println!("Your are: {}", my_side);
 
         
         let tcp_stream_clone = tcp_stream.try_clone().unwrap();
@@ -97,19 +99,45 @@ fn main() -> Result<(), String> {
     //let mut board = Board2::new(&tex_atlas);
     let field_size = 50;
     let board_size = Vec2u::fill(8);
-    let color_theme = ColorTheme {
+    let blue_theme = ColorTheme {
         board_primary: Color::WHITE,
         board_secondary: Color::RGB(13,56,166),
         valid_moves: Color::RGBA(3, 138, 255, 128),
         selection: Color::RGBA(255, 123, 98, 200),
-        last_move: Color::RGB(199,232,172),
+        last_move_primary: Color::RGB(169,202,142),
+        last_move_secondary: Color::RGB(124,172,112),
         check: Color::RGB(230,55,96)
     };
+    let green_theme = ColorTheme {
+        board_primary: Color::RGB(238,238,210),
+        board_secondary: Color::RGB(118,150,86),
+        valid_moves: Color::RGBA(3, 138, 255, 128),
+        selection: Color::RGBA(255, 123, 98, 200),
+        last_move_primary: Color::RGB(226,242,108),
+        last_move_secondary: Color::RGB(186,202,68),
+        check: Color::RGB(230,55,96)
+    };
+
+    let red_theme = ColorTheme {
+        board_primary: Color::WHITE,
+        board_secondary: Color::RGB(230,55,96),
+        valid_moves: Color::RGBA(3, 138, 255, 128),
+        selection: Color::RGBA(255, 123, 98, 200),
+        last_move_primary: Color::RGB(226,242,108),
+        last_move_secondary: Color::RGB(186,202,68),
+        check: Color::RGB(13,56,166)
+    };
+
+    let themes = [blue_theme, green_theme, red_theme];
+    let mut theme_index = 0;
+    let mut color_lifted = true;
+
     let mut renderer = Renderer::new(&tex_atlas, 200.0, &mut canvas);
     let mut turn = Side::White;
+    println!("{}'s turn", turn);
     let mut board = gen_starting_pos();
     board.calculate_valid_moves(turn);
-    let mut board_renderer = BoardRenderer::new(field_size, color_theme, board_size, 2.0);
+    let mut board_renderer = BoardRenderer::new(field_size, &blue_theme, board_size, 2.0);
 
 
 
@@ -165,12 +193,23 @@ fn main() -> Result<(), String> {
             board_renderer.unselect();
         }
 
+        if inputs.pressed(Control::Color) && color_lifted {
+            if theme_index + 1 > themes.len() - 1 {
+                theme_index = 0;
+            } else {
+                theme_index += 1;
+            }
+            board_renderer.update_color_theme(&themes[theme_index]);
+        }
+
         let mut change_turn = |turn: &mut Side| {
             *turn = match turn {
                 Side::Black => Side::White,
                 Side::White => Side::Black,
             };
+            println!("{}'s turn", turn);
         };
+        color_lifted = !inputs.pressed(Control::Color);
 
 
         /*if inputs.left_click {

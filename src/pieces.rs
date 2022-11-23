@@ -1,4 +1,4 @@
-use std::ops::Not;
+use std::{ops::Not, fmt::{Display, write}};
 
 
 #[derive(Clone, Copy, PartialEq)]
@@ -31,6 +31,15 @@ impl Piece  {
 pub enum Side {
     Black,
     White
+}
+
+impl Display for Side {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", match self {
+            Side::Black => "Black",
+            Side::White =>  "White",
+        })
+    }
 }
 
 impl Not for Side {

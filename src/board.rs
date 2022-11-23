@@ -436,17 +436,19 @@ pub fn gen_starting_pos() -> Board {
 }
 
 
+#[derive(Clone, Copy)]
 pub struct ColorTheme {
     pub board_primary: Color,
     pub board_secondary: Color,
     pub valid_moves: Color,
     pub selection: Color,
     pub check: Color,
-    pub last_move: Color
+    pub last_move_primary: Color,
+    pub last_move_secondary: Color
 }
 
 impl ColorTheme {
-    pub fn new(board_primary: Color, board_secondary: Color,   valid_moves: Color, selection: Color, check: Color, last_move: Color) -> Self {
-        Self {board_primary, board_secondary, valid_moves, selection, check, last_move}
+    pub fn new(board_primary: Color, board_secondary: Color,   valid_moves: Color, selection: Color, check: Color, last_move: Color, last_move_primary: Color,  last_move_secondary: Color) -> Self {
+        Self {board_primary, board_secondary, valid_moves, selection, check, last_move_primary,  last_move_secondary}
     }
 }
