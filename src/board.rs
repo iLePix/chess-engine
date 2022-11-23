@@ -268,9 +268,13 @@ impl Board {
                 self.check = self.is_check();
                 
                 if total_moves_pre_check == 0 {
-                    println!("GAME DRAWN")
+                    print!("++++++++++++++++++++++++++++++++");
+                    println!("GAME DRAWN");
+                    print!("++++++++++++++++++++++++++++++++");
                 } else if total_moves_post_check == 0 {
-                    println!("GAME WON BY {:?} ", turn);
+                    print!("++++++++++++++++++++++++++++++++");
+                    println!("GAME WON BY {} ", turn);
+                    print!("++++++++++++++++++++++++++++++++");
                 }
 
                 return true
@@ -313,9 +317,9 @@ impl Board {
                 PieceType::Rook => {
 
                     let rook = |y: i32, castle: &mut Castle| {
-                        if *pos == Vec2i::new(0,0) {
+                        if *pos == Vec2i::new(0,y) {
                             castle.long = false
-                        } else if *pos == Vec2i::new(7,7) {
+                        } else if *pos == Vec2i::new(7,y) {
                             castle.short = false
                         }
                     };
@@ -377,8 +381,8 @@ impl Board {
     }
 
     fn space_is_empty(&self, pos1: Vec2i, pos2: Vec2i) -> bool {
-        for x in pos1.x..=pos2.x {
-            for y in pos1.y..=pos2.y {
+        for x in pos1.x.min(pos2.x)..=pos2.x.max(pos1.x)  {
+            for y in pos1.y.min(pos2.y)..=pos2.y.max(pos1.y) {
                 if self.get_piece_at_pos(&Vec2i::new(x,y)).is_some() {
                     return false;
                 }
