@@ -1,10 +1,10 @@
-use std::{collections::{HashMap, HashSet}, ops::{Range, RangeInclusive}, time::Instant};
+use std::{collections::{HashMap, HashSet}, ops::{Range, RangeInclusive}, time::Instant, error::Error};
 
 use sdl2::{rect::{Rect, Point}, pixels::Color, render::{Canvas, Texture}, video::Window, sys::PropModePrepend};
 use vecm::vec::{Vec2i, Vec2u, VecInto};
 
 
-use crate::{pieces::{Piece, Side, PieceType}, hashmap, count, atlas::TextureAtlas, renderer::Renderer};
+use crate::{pieces::{Piece, Side, PieceType}, hashmap, count, atlas::TextureAtlas, renderer::Renderer, game::GameState};
 
 
 #[derive(Clone, Copy)]
@@ -20,12 +20,31 @@ impl Castle {
     fn forbid() -> Self {
         Self {short: false, long: false}
     }
+
+    //KQkq ->
+
+    fn from_fen(fen: &str) -> Result<(Self, Self), FenError> {
+        let mut black = Castle::forbid();
+        let mut white = Castle::forbid();
+        if fen == "-" { return Ok((white, black)) }
+        for c in fen.chars() {
+            match c {
+                'K' => white.short = true,
+                'Q' => white.long = true,
+                'k' => black.short = true,
+                'q' => black.long = true,
+                _ => return Err(FenError::Castle)
+            }
+        }
+        Ok((white, black)) 
+    }
+
 }
 
 
 #[derive(Clone)]
 pub struct Board {
-    pub board: Vec<Vec<Option<Piece>>>,//[[Option<Piece>; 8]; 8],
+    pub board: [[Option<Piece>; 8]; 8],
     pub size: Vec2u,
     //0 = White, 1, Black
     pawn_start_y: (u32, u32),
@@ -35,13 +54,13 @@ pub struct Board {
     black_castle: Castle,
     en_passant_possible: Option<Vec2i>,
     pub check: (bool, bool),
-    captured_pieces: Vec<Piece>,
+    //captured_pieces: Vec<Piece>,
     pub last_move: Option<(Vec2i, Vec2i)>
 }
 
 impl Board {
-    pub fn new(board: Vec<Vec<Option<Piece>>>, size: Vec2u, pawn_start_y: (u32, u32), white_castling_possible: (bool, bool), black_castling_possible: (bool, bool), en_passant_possible: Option<Vec2i>) -> Self {
-        Self {board, size, pawn_start_y, valid_moves: HashMap::new(), white_castle: Castle::new(), black_castle: Castle::new(), en_passant_possible, captured_pieces: Vec::new(), check: (false, false), last_move: None}
+    pub fn new(board: [[Option<Piece>; 8]; 8], size: Vec2u, pawn_start_y: (u32, u32), white_castling_possible: (bool, bool), black_castling_possible: (bool, bool), en_passant_possible: Option<Vec2i>) -> Self {
+        Self {board, size, pawn_start_y, valid_moves: HashMap::new(), white_castle: Castle::new(), black_castle: Castle::new(), en_passant_possible, check: (false, false), last_move: None}
     }
 
     fn valid_moves_for_piece(&self, piece_pos: Vec2i, turn: Side, from_castling_check: bool) -> HashSet<Vec2i> {
@@ -124,13 +143,13 @@ impl Board {
                 if 
                     castle.long && 
                     self.space_is_empty(Vec2i::new(1,y), Vec2i::new(3,y)) && 
-                    (2..=3).all(|x| !self.threathens(&Vec2i::new(x,y), turn, true))
+                    (2..=4).all(|x| !self.threathens(&Vec2i::new(x,y), turn, true))
                 {
                     valid_mvs.insert(Vec2i::new(2,y));
                 }
                 if  castle.short && 
                     self.space_is_empty(Vec2i::new(5,y), Vec2i::new(6,y)) &&
-                    (5..=6).all(|x| !self.threathens(&Vec2i::new(x,y), turn, true))
+                    (4..=6).all(|x| !self.threathens(&Vec2i::new(x,y), turn, true))
                 {
                     valid_mvs.insert(Vec2i::new(6,y));
                 }
@@ -260,7 +279,7 @@ impl Board {
     }
 
     //returns true if move was possible
-    pub fn make_move(&mut self, piece_pos: &Vec2i, dst: &Vec2i, turn: Side) -> bool {
+    pub fn make_move(&mut self, piece_pos: &Vec2i, dst: &Vec2i, turn: Side) -> Result<GameState, ()> {
         if let Some(valid_moves) = self.valid_moves.get(&piece_pos) {
             if valid_moves.contains(&dst) {
                 self.move_piece(&piece_pos, &dst, turn);   
@@ -268,19 +287,15 @@ impl Board {
                 self.check = self.is_check();
                 
                 if total_moves_pre_check == 0 {
-                    print!("++++++++++++++++++++++++++++++++");
-                    println!("GAME DRAWN");
-                    print!("++++++++++++++++++++++++++++++++");
+                    return Ok(GameState::Draw)
                 } else if total_moves_post_check == 0 {
-                    print!("++++++++++++++++++++++++++++++++");
-                    println!("GAME WON BY {} ", turn);
-                    print!("++++++++++++++++++++++++++++++++");
+                    return Ok(GameState::Winner((turn)))
                 }
 
-                return true
+                return Ok(GameState::Running)
             }
         }
-        false
+        return Err(())
     }
 
     pub fn is_check(&self) -> (bool, bool) {
@@ -299,7 +314,7 @@ impl Board {
         if let Some(mut piece) = self.get_piece_at_pos(pos) {
             //if there is a figure at the dst
             if let Some(dst_piece) = self.get_piece_at_pos(dst) {
-                self.captured_pieces.push(dst_piece);
+                //self.captured_pieces.push(dst_piece);
             }
             match piece.ty {
                 PieceType::King => {
@@ -325,8 +340,8 @@ impl Board {
                     };
 
                     match piece.side {
-                        Side::Black => rook(7, &mut self.black_castle),
-                        Side::White => rook(0, &mut self.black_castle)
+                        Side::Black => rook(0, &mut self.black_castle),
+                        Side::White => rook(7, &mut self.white_castle)
                     }
                 },
                 PieceType::Pawn => {
@@ -356,12 +371,10 @@ impl Board {
     }
 
     fn try_castle(&mut self, y: i32, castle: Castle, dst: &Vec2i) {
-        if *dst == Vec2i::new(2, y) && castle.long {
-            let rook = self.get_piece_at_pos(&Vec2i::new(0,y)).expect("Couldnt find castling tower");
+        if let Some(rook) = self.get_piece_at_pos(&Vec2i::new(0,y)) && *dst == Vec2i::new(2, y) && castle.long {
             self.set_piece(rook, &Vec2i::new(3,y));
             self.remove_piece(&Vec2i::new(0,y));
-        } else if *dst == Vec2i::new(6, y) && castle.short {
-            let rook = self.get_piece_at_pos(&Vec2i::new(7,y)).expect("Couldnt find castling tower");
+        } else if let Some(rook) = self.get_piece_at_pos(&Vec2i::new(7,y)) && *dst == Vec2i::new(6, y) && castle.short {
             self.set_piece(rook, &Vec2i::new(5,y));
             self.remove_piece(&Vec2i::new(7,y));
         }
@@ -391,68 +404,203 @@ impl Board {
         return true
     }
 
-}
 
-pub fn gen_kings_pos() -> Board {
-    let mut board = vec![vec![None; 8]; 8];
-    board[4][0] = Some(Piece::new(PieceType::King, Side::Black));
-    board[4][7] = Some(Piece::new(PieceType::King, Side::White));
-    Board::new(
-        board,
-        Vec2u::fill(8),
-        (1,6),
-        (false, false),
-        (false, false),
-        None,
-    )
-}
-
-pub fn gen_starting_pos() -> Board {
-    let mut board = vec![vec![None; 8]; 8];
-
-
-    //gen black
-    let mut side = Side::Black;
-    //pawns
-    for x in 0..=7 {
-        board[x][1] = Some(Piece::new(PieceType::Pawn, Side::Black));
-        board[x][6] = Some(Piece::new(PieceType::Pawn, Side::White));
+    pub fn make_best_move(&mut self, turn: Side) -> (Vec2i, Vec2i) {
+        let mut best_move = ((Vec2i::zero(), Vec2i::zero()), -std::i32::MAX);
+        for (piece_pos, mvs) in &self.valid_moves {
+            for dst in mvs {
+                let mut board_clone = self.clone();
+                board_clone.make_move(&piece_pos, &dst, turn);
+                let eval = self.evaluate(turn);
+                if eval > best_move.1 {
+                    best_move = ((*piece_pos, *dst), eval);
+                }
+            }
+        }
+        self.make_move(&best_move.0.0, &best_move.0.1, turn);
+        best_move.0
     }
 
-    let first_rank = {
-        use PieceType::*;
-        [Rook, Knight, Bishop, Queen, King, Bishop, Knight, Rook]
-    };
 
-    for (x, piece_ty) in first_rank.iter().enumerate() {
-        board[x][0] = Some(Piece::new(*piece_ty, Side::Black));
-        board[x][7] = Some(Piece::new(*piece_ty, Side::White))
+
+    pub fn evaluate(&self, side: Side) -> i32 {
+        self.count_material(side) - self.count_material(!side)
     }
 
-    Board::new(
-        board,
-        Vec2u::fill(8),
-        (6,1),
-        (false, false),
-        (false, false),
-        None,
-    )
-}
+    fn count_material(&self, turn: Side) -> i32 {
+        const PAWN_VALUE: i32 = 100;
+        const KNIGHT_VALUE: i32 = 300;
+        const BISHOP_VALUE: i32 = 300;
+        const ROOK_VALUE: i32 = 500;
+        const QUEEN_VALUE: i32 = 900;
 
-
-#[derive(Clone, Copy)]
-pub struct ColorTheme {
-    pub board_primary: Color,
-    pub board_secondary: Color,
-    pub valid_moves: Color,
-    pub selection: Color,
-    pub check: Color,
-    pub last_move_primary: Color,
-    pub last_move_secondary: Color
-}
-
-impl ColorTheme {
-    pub fn new(board_primary: Color, board_secondary: Color,   valid_moves: Color, selection: Color, check: Color, last_move: Color, last_move_primary: Color,  last_move_secondary: Color) -> Self {
-        Self {board_primary, board_secondary, valid_moves, selection, check, last_move_primary,  last_move_secondary}
+        let mut material = 0;
+        for optional_piece in self.board.iter().flat_map(|column| column.iter()) {
+            if let Some(piece) = optional_piece && piece.side == turn {
+                material += match piece.ty {
+                    PieceType::Queen => QUEEN_VALUE,
+                    PieceType::King => 0,
+                    PieceType::Knight => KNIGHT_VALUE,
+                    PieceType::Bishop => BISHOP_VALUE,
+                    PieceType::Rook => ROOK_VALUE,
+                    PieceType::Pawn => PAWN_VALUE,
+                }
+            }
+        }
+        material
     }
+
+    pub fn gen_starting_pos() -> Self {
+        let mut board = [[None; 8]; 8];
+    
+    
+        //gen black
+        let mut side = Side::Black;
+        //pawns
+        for x in 0..=7 {
+            board[x][1] = Some(Piece::new(PieceType::Pawn, Side::Black));
+            board[x][6] = Some(Piece::new(PieceType::Pawn, Side::White));
+        }
+    
+        let first_rank = {
+            use PieceType::*;
+            [Rook, Knight, Bishop, Queen, King, Bishop, Knight, Rook]
+        };
+    
+        for (x, piece_ty) in first_rank.iter().enumerate() {
+            board[x][0] = Some(Piece::new(*piece_ty, Side::Black));
+            board[x][7] = Some(Piece::new(*piece_ty, Side::White))
+        }
+    
+        Self::new(
+            board,
+            Vec2u::fill(8),
+            (6,1),
+            (false, false),
+            (false, false),
+            None,
+        )
+    }
+
+    pub fn gen_kings_pos() -> Board {
+        let mut board = [[None; 8]; 8];
+        board[4][0] = Some(Piece::new(PieceType::King, Side::Black));
+        board[4][7] = Some(Piece::new(PieceType::King, Side::White));
+        Board::new(
+            board,
+            Vec2u::fill(8),
+            (1,6),
+            (false, false),
+            (false, false),
+            None,
+        )
+    }
+
+    // "p" stands for pawn, "r" for rook, "n" for knight, "b" for bishop, "q" for queen, and "k" for king.
+
+    pub fn from_fen(fen: &str) -> Result<(Self, Side), FenError> {
+        let mut cursor = Vec2i::zero();
+        let mut board = [[None; 8]; 8];
+        let mut sections = fen.split(' ');
+        fn piece_type(c: char) -> Option<PieceType> {
+            use PieceType::*;
+            match c {
+                'p' => Some(Pawn),
+                'r' => Some(Rook),
+                'n' => Some(Knight),
+                'b' => Some(Bishop),
+                'q' => Some(Queen),
+                'k' => Some(King),
+                e => {panic!("Undefined character in fen: {}", e); None}
+            }
+        }
+
+        fn pos(s: &str) -> Result<Vec2i, FenError> {
+            let a = s.chars().next().ok_or(FenError::EnPassant)?;
+            let b = s.chars().next().ok_or(FenError::EnPassant)?;
+            if s.chars().next().is_some() || !('a'..='h').contains(&a) || !('1'..='8').contains(&a) {
+                return Err(FenError::EnPassant);
+            }
+            Ok(Vec2i::new((a as u8 - b'a') as i32, (b as u8 - b'1') as i32))
+        }
+
+        let pieces = sections.next().ok_or(FenError::Pieces)?;
+
+        for c in pieces.chars() {
+            match c {
+                '/' => {cursor.y += 1; cursor.x = 0},
+                '0'..='8' => cursor.x += (c as u8 - b'0') as i32,
+                'a'..='z' | 'A'..='Z' => {
+                    if cursor.y > 7 {
+                        return Err(FenError::Cursor);
+                    }
+                    use Side::*;
+                    let side = if c.is_lowercase() {Black} else {White};
+                    board[cursor.x as usize][cursor.y as usize] = Some(
+                        Piece::new(
+                            piece_type(c.to_ascii_lowercase()).ok_or(FenError::Pieces)?,
+                            side
+                        )
+                    );
+                    cursor.x += 1;
+                },
+                _ => return Err(FenError::Pieces)
+            }
+        }
+
+        let turn = match sections.next().ok_or(FenError::Turn)? {
+            "b" => Side::Black,
+            "w" => Side::White,
+            _ => return Err(FenError::Turn)
+        };
+
+
+        let (white_castle, black_castle) = Castle::from_fen(sections.next().ok_or(FenError::MissingSection(1))?)?;
+
+        let en_passant_possible = match sections.next().ok_or(FenError::EnPassant)?
+         {
+            "-" => None,
+            s => Some(pos(s)?)
+        };
+
+        let _halfmoves: &str = sections.next().ok_or(FenError::HalfMoves)?;
+        let _fullmoves: &str = sections.next().ok_or(FenError::FullMoves)?;
+
+        if sections.next().is_some() { return Err(FenError::Cursor)}
+
+
+        Ok((    
+            Self {
+                board,
+                white_castle,
+                black_castle,
+                en_passant_possible,
+                valid_moves: HashMap::new(),
+                check: (false, false),
+                last_move: None,
+                pawn_start_y: (1,6),
+                size: Vec2u::fill(8)
+            },
+            turn
+        ))
+    }
+
 }
+
+#[derive(Debug)]
+pub enum FenError {
+    Turn,
+    Cursor,
+    Castle,
+    EnPassant,
+    Pieces,
+    HalfMoves,
+    FullMoves,
+    MissingSection(u32)
+}
+
+
+
+
+
+

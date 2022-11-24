@@ -1,7 +1,7 @@
 use std::{ops::Not, fmt::{Display, write}};
 
 
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, PartialEq, Debug)]
 pub enum PieceType {
     Queen,
     King,

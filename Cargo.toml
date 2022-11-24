@@ -6,7 +6,8 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-sdl2 = {version="0.35.1", features=["image"]}
+sdl2 = {version="0.35.1", features=["image", "ttf"]}
 vecm = {git = "https://github.com/LinusDikomey/vecm"}
 binverse = "0.6.2"
 binverse_derive = "0.6.2"
+rand = "0.8.5"

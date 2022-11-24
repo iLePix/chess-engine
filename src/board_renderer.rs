@@ -1,7 +1,7 @@
 use sdl2::{rect::{Rect, Point}, pixels::Color};
 use vecm::vec::{Vec2i, Vec2u};
 
-use crate::{board::{Board, ColorTheme}, renderer::Renderer, pieces::{Side, Piece, PieceType}};
+use crate::{board::Board, renderer::Renderer, pieces::{Side, Piece, PieceType}, color_themes::ColorTheme};
 
 
 

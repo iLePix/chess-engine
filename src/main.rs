@@ -7,10 +7,12 @@ pub mod atlas;
 pub mod renderer;
 pub mod board_renderer;
 pub mod dtos;
+pub mod game;
+pub mod color_themes;
 
 use atlas::TextureAtlas;
 use binverse::error::BinverseError;
-use board::{Board, ColorTheme, gen_starting_pos, gen_kings_pos};
+use board::{Board};
 use board_renderer::BoardRenderer;
 use dtos::{PlayerInfo, Move, GameInfo};
 use pieces::{Piece, Side};
@@ -22,16 +24,22 @@ use sdl2::keyboard::{Keycode, Mod};
 use sdl2::{rect::{Rect, Point}, pixels::Color, render::{Canvas, Texture}, video::Window, sys::PropModePrepend};
 use vecm::vec::{Vec2i, Vec2u, Vec2, VecInto};
 
+use std::collections::{HashMap, HashSet};
+use std::env::Args;
 use std::net::TcpStream;
 use std::ops::Add;
 use std::path::Path;
-use std::sync::mpsc::{self, TryRecvError};
+use std::sync::mpsc::{self, TryRecvError, Receiver};
+use std::thread::JoinHandle;
 //use world::celo::Celo;
 use std::time::{Duration, Instant};
+use rand::Rng;
 
 mod input; 
 
 
+use crate::color_themes::ColorTheme;
+use crate::game::{Game, Player, Remote};
 use crate::input::Control;
 
 fn receive_mvs(mut tcp_stream: TcpStream, moves: mpsc::Sender<Move>) -> Result<(), BinverseError> {
@@ -46,34 +54,111 @@ struct MultiplayerUtils {
     my_side: Side,
 }
 
+fn parse_args(args: &mut Args) -> (bool, bool, Option<usize>, Option<String>, Option<String>){
+    args.skip(1);
+    let mut versus = true;
+    let mut server = false;
+    let mut ai = None;
+    let mut ip = None;
+    let mut fen = None;
+    while let Some(arg) = args.next() {
+        match arg.as_str() {
+            "-s" | "--server" => panic!("Not available at the moment"),//server = true,
+            "-a" | "--ai" => ai = Some(
+                args.next()
+                    .expect("give ai depth as argument")
+                    .parse::<usize>()
+                    .expect("depth has to be a positive integer")
+                ),
+            "-f" | "--fen" => fen = Some(args.next().expect("fen expected after -f/--fen")),
+            "-c" | "--c" => ip = Some(args.next().expect("connect requires ip")), 
+            _ => eprintln!("unrecognized arg {arg}"),
+        }
+    }
+    (versus, server, ai, ip, fen)
+} 
+
+#[derive(Debug)]
+enum ConnectionError {
+    Playername,
+    IPParse,
+    Send,
+    Receive
+}
+
+fn connect(ip: String) -> Result<MultiplayerUtils, ConnectionError> {
+    println!("Type in your name: ");
+    let mut player_name = String::new();
+    std::io::stdin().read_line(&mut player_name).or(Err(ConnectionError::Playername))?;
+    player_name = player_name.trim().to_owned();
+    println!("Waiting for opponent");
+    let mut tcp_stream = TcpStream::connect(ip).or(Err(ConnectionError::IPParse))?;
+    dtos::send(&mut tcp_stream, PlayerInfo { name: player_name }).or(Err(ConnectionError::Send))?;
+    let game_info: GameInfo = dtos::recv(&mut tcp_stream).or(Err(ConnectionError::Receive))?;
+    let my_side = if game_info.is_black { Side::Black } else { Side::White };
+    println!("Your Enemy has connected: {}", game_info.other_player);
+    println!("Your are: {}", my_side);
+
+    
+    let tcp_stream_clone = tcp_stream.try_clone().unwrap();
+    let (sender, rx) = mpsc::channel();
+
+    std::thread::spawn(|| receive_mvs(tcp_stream_clone, sender));
+    Ok(MultiplayerUtils { tcp_stream, moves_rx: rx, my_side})
+}
+
 
 fn main() -> Result<(), String> {
-    let mut args = std::env::args().skip(1);
-    let mut player_name = String::new();
-    
-    let mut mp_utils = args.next().map(|ip|  {
-        println!("Type in your name: ");
-        std::io::stdin().read_line(&mut player_name).expect("Failed to read playername");
-        player_name = player_name.trim().to_owned();
-        println!("Waiting for opponent");
-        let mut tcp_stream = TcpStream::connect(ip).expect("Couldnt connect");
-        dtos::send(&mut tcp_stream, PlayerInfo { name: player_name }).expect("Couldnt sent player_info");
-        let game_info: GameInfo = dtos::recv(&mut tcp_stream).expect("Didnt get player_info");
-        let my_side = if game_info.is_black { Side::Black } else { Side::White };
-        println!("Your Enemy has connected: {}", game_info.other_player);
-        println!("Your are: {}", my_side);
+    let mut args = std::env::args();
+    let (versus, server, ai, ip, fen) = parse_args(&mut args);
 
-        
-        let tcp_stream_clone = tcp_stream.try_clone().unwrap();
-        let (sender, rx) = mpsc::channel();
-    
-        std::thread::spawn(|| receive_mvs(tcp_stream_clone, sender));
-        MultiplayerUtils { tcp_stream, moves_rx: rx, my_side}
-    });
 
+    let mut game = Game::new(Player::Me, Player::Me, false);
+
+
+    if let Some(ip) = ip {
+        let mp_utils = match connect(ip) {
+            Ok(utils) => utils,
+            Err(err) => panic!("Error connecting: {:?}", err)
+        };
+        let remote = Remote {socket: mp_utils.tcp_stream, rx: mp_utils.moves_rx };
+        let (white_player, black_player, flipped) = match mp_utils.my_side {
+            Side::Black => (Player::Remote(remote), Player::Me, true),
+            Side::White => (Player::Me, Player::Remote(remote), false),
+        };
+        game = Game::new(white_player, black_player, flipped);
+    }
+
+    if let Some(depth) = ai {
+        let mut rng = rand::thread_rng();
+        let is_white: bool = rng.gen();
+        let cpu = Player::Cpu { depth, computation: None};
+        let (white_player, black_player) = match is_white {
+            true => (Player::Me, cpu),
+            false => (cpu, Player::Me),
+        };
+        game = Game::new(Player::Me, Player::Me, !is_white);
+    }
+
+    if let Some(fen) = fen {
+        (game.board, game.turn) = match Board::from_fen(&fen) {
+            Ok(r) => r,
+            Err(err) => panic!("Error with fen: {:?}", err)
+        }
+    }
+
+
+
+
+
+
+    let font_path = &Path::new("../../res/IBMPlexSerif-Medium.ttf");
     let sdl_context = sdl2::init()?;
     let video_subsystem = sdl_context.video()?;
     let _image_context = sdl2::image::init(InitFlag::PNG | InitFlag::JPG)?;
+    let ttf_context = sdl2::ttf::init().map_err(|e| e.to_string())?;
+    let mut font = ttf_context.load_font(font_path, 128)?;
+    font.set_style(sdl2::ttf::FontStyle::BOLD);
 
 
     let window = video_subsystem.window("Chess", 400, 400)
@@ -96,54 +181,56 @@ fn main() -> Result<(), String> {
     let texture_creator = canvas.texture_creator();
     let pieces_texture = texture_creator.load_texture(chess_pieces)?;
     let tex_atlas = TextureAtlas::new(&pieces_texture, 90);
-    //let mut board = Board2::new(&tex_atlas);
+
     let field_size = 50;
     let board_size = Vec2u::fill(8);
-    let blue_theme = ColorTheme {
-        board_primary: Color::WHITE,
-        board_secondary: Color::RGB(13,56,166),
-        valid_moves: Color::RGBA(3, 138, 255, 128),
-        selection: Color::RGBA(255, 123, 98, 200),
-        last_move_primary: Color::RGB(169,202,142),
-        last_move_secondary: Color::RGB(124,172,112),
-        check: Color::RGB(230,55,96)
-    };
-    let green_theme = ColorTheme {
-        board_primary: Color::RGB(238,238,210),
-        board_secondary: Color::RGB(118,150,86),
-        valid_moves: Color::RGBA(3, 138, 255, 128),
-        selection: Color::RGBA(255, 123, 98, 200),
-        last_move_primary: Color::RGB(226,242,108),
-        last_move_secondary: Color::RGB(186,202,68),
-        check: Color::RGB(230,55,96)
-    };
 
-    let red_theme = ColorTheme {
-        board_primary: Color::WHITE,
-        board_secondary: Color::RGB(230,55,96),
-        valid_moves: Color::RGBA(3, 138, 255, 128),
-        selection: Color::RGBA(255, 123, 98, 200),
-        last_move_primary: Color::RGB(226,242,108),
-        last_move_secondary: Color::RGB(186,202,68),
-        check: Color::RGB(13,56,166)
-    };
-
-    let themes = [blue_theme, green_theme, red_theme];
+    let themes = [ColorTheme::blue_theme(), ColorTheme::green_theme(), ColorTheme::red_theme()];
     let mut theme_index = 0;
     let mut color_lifted = true;
 
     let mut renderer = Renderer::new(&tex_atlas, 200.0, &mut canvas);
-    let mut turn = Side::White;
-    println!("{}'s turn", turn);
-    let mut board = gen_starting_pos();
-    board.calculate_valid_moves(turn);
-    let mut board_renderer = BoardRenderer::new(field_size, &blue_theme, board_size, 2.0);
+    println!("{}'s turn", game.turn);
+    game.board.calculate_valid_moves(game.turn);
+    let mut board_renderer = BoardRenderer::new(field_size, &themes[theme_index], board_size, 2.0);
 
 
 
     let mut last_frame_time = Instant::now();
     let mut s_tick = 0.0;
     let s_tick_increment = 200.0;
+
+
+
+    fn spawn_move_computer(board: Board, depth: u32, turn: Side) -> JoinHandle<(Vec2i, Vec2i)> { 
+        std::thread::spawn(move || {
+            compute_best_move(&board, depth, turn).0
+        })
+    }
+
+
+
+    fn compute_best_move(board: &Board, depth: u32, turn: Side) -> ((Vec2i, Vec2i), i32){
+        let next_moves_by_piece = board.valid_moves.clone();
+        let mut best_move = ((Vec2i::zero(), Vec2i::zero()), std::i32::MIN);
+        for (piece_pos, mvs) in next_moves_by_piece {
+            for dst in mvs {
+                let mut board = board.clone();
+                board.make_move(&piece_pos, &dst, turn);
+                let eval = if depth == 0 {
+                    board.evaluate(turn)
+                } else {
+                    -compute_best_move(&board, depth - 1, !turn).1
+                };
+                if eval > best_move.1 {
+                    best_move = ((piece_pos, dst), eval);
+                }
+            }
+        }
+        best_move
+    }
+
+    let mut next_move_option: Option<JoinHandle<(Vec2i, Vec2i)>> = None;
 
 
     'running: loop {
@@ -186,13 +273,14 @@ fn main() -> Result<(), String> {
             }
         }
 
+        
         let cursor_field = (inputs.mouse_pos / field_size).vec_into();
-  
 
         if inputs.pressed(Control::Escape) {
             board_renderer.unselect();
         }
 
+        //colortheme
         if inputs.pressed(Control::Color) && color_lifted {
             if theme_index + 1 > themes.len() - 1 {
                 theme_index = 0;
@@ -201,38 +289,42 @@ fn main() -> Result<(), String> {
             }
             board_renderer.update_color_theme(&themes[theme_index]);
         }
-
-        let mut change_turn = |turn: &mut Side| {
-            *turn = match turn {
-                Side::Black => Side::White,
-                Side::White => Side::Black,
-            };
-            println!("{}'s turn", turn);
-        };
         color_lifted = !inputs.pressed(Control::Color);
 
 
-        /*if inputs.left_click {
+
+
+        
+        if inputs.left_click {
             if board_renderer.selected.is_none() {
-                board_renderer.select(cursor_field, turn, &board);
-            } else if let Some(selected) = board_renderer.selected && board.make_move(&selected, &cursor_field, turn) {
+                board_renderer.select(cursor_field, game.turn, &game.board);
+            } else if let Some(selected) = board_renderer.selected && game.board.make_move(&selected, &cursor_field, game.turn).is_ok() {
                 board_renderer.unselect();
-                change_turn(&mut turn);
+                game.change_turn();
             } else if cursor_field == board_renderer.selected.unwrap() {
                 board_renderer.unselect();
             }
-        }*/
+        }
+        board_renderer.hover(cursor_field);
+        board_renderer.render(&game.turn, &game.board, &mut renderer, dt);
 
 
 
+        //KI CODE 
         
+        /*
 
-        
         if let Some(mp_utils) = &mut mp_utils {
             if inputs.left_click {
                 if board_renderer.selected.is_none() {
                     board_renderer.select(cursor_field, mp_utils.my_side, &board);
-                } else if let Some(selected) = board_renderer.selected && mp_utils.my_side == turn && board.make_move(&selected, &cursor_field, turn) {
+                } else if let Some(selected) = board_renderer.selected && mp_utils.my_side == turn && board.make_move(&selected, &cursor_field, turn).is_ok() {
+                    /*match board.make_move(&selected, &cursor_field, turn) {
+                        Ok(game_state) => todo!(),
+                        Err(_) => todo!(),
+                    }*/
+
+
                     //broadcast move
                     dtos::send(
                         &mut mp_utils.tcp_stream, 
@@ -253,7 +345,7 @@ fn main() -> Result<(), String> {
                 match mp_utils.moves_rx.try_recv() {
                     Ok(new_move) => {
                         println!("Receiving move {:?} for {:?}", new_move, turn);
-                        if !board.make_move(&Vec2i::new(new_move.x1 as i32, 7 - new_move.y1 as i32), &Vec2i::new(new_move.x2 as i32, 7 - new_move.y2 as i32), turn) {
+                        if board.make_move(&Vec2i::new(new_move.x1 as i32, 7 - new_move.y1 as i32), &Vec2i::new(new_move.x2 as i32, 7 - new_move.y2 as i32), turn).is_err() {
                             panic!("Opponent move not accepted");
                         }
                         change_turn(&mut turn);
@@ -266,10 +358,13 @@ fn main() -> Result<(), String> {
             board_renderer.render(&mp_utils.my_side, &board, &mut renderer, dt);
 
         } else {
+
+              //KI CODE
+            /*
             if inputs.left_click {
                 if board_renderer.selected.is_none() {
                     board_renderer.select(cursor_field, turn, &board);
-                } else if board.make_move(&board_renderer.selected.unwrap(), &cursor_field, turn) {
+                } else if turn == Side::White && board.make_move(&board_renderer.selected.unwrap(), &cursor_field, turn).is_ok() {
                     board_renderer.unselect();
                     change_turn(&mut turn);
                 } else if cursor_field == board_renderer.selected.unwrap() {
@@ -278,10 +373,58 @@ fn main() -> Result<(), String> {
             }
             board_renderer.hover(cursor_field);
             board_renderer.render(&turn, &board, &mut renderer, dt);
+
+        
+
+            if turn == Side::Black {
+                if let Some(next_move) = &next_move_option {
+                    if next_move.is_finished() {
+                        let mv = next_move_option.take().unwrap().join().expect("Thread couldnt be joined");
+                        board.make_move(&mv.0, &mv.1, turn);
+                        change_turn(&mut turn);
+                    }
+                } else {
+                    next_move_option = Some(spawn_move_computer(board.clone(), 3, turn));
+                }
+            }
+
+            */
+             
+
+
+
+
+
+            //COOP CODE
+
+
+            if inputs.left_click {
+                if board_renderer.selected.is_none() {
+                    board_renderer.select(cursor_field, turn, &board);
+                } else if cursor_field == board_renderer.selected.unwrap() {
+                    board_renderer.unselect();
+                } else {
+                    match board.make_move(&board_renderer.selected.unwrap(), &cursor_field, turn) {
+                        Ok(game_state) => {
+                            match game_state {
+                                game::GameState::Running => {},
+                                game::GameState::Winner(side) => println!("Winner: {}", side),
+                                game::GameState::Draw => println!("DRAW"),
+                            }
+                            board_renderer.unselect();
+                            change_turn(&mut turn);
+                        },
+                        Err(_) => println!("Move not possilbe"),
+                    }
+                }
+            }
+            board_renderer.hover(cursor_field);
+            board_renderer.render(&turn, &board, &mut renderer, dt);
         }
 
+        */
 
-        if let Some(piece) = board_renderer.get_selected_piece(&board) {
+        if let Some(piece) = board_renderer.get_selected_piece(&game.board) {
             if s_tick + s_tick_increment*dt >= 255.0 {
                 s_tick = 0.0;
             } else {
@@ -309,13 +452,17 @@ fn main() -> Result<(), String> {
     Ok(())
 }
 
-enum GameState {
-    Running,
-    Winner(Side),
-    Draw
-}
-
 
 fn parabola(x: i32) -> f32 {
     -1.0 * (0.125 * x as f32 - 16.0).powi(2) + 256.0
 }
+
+
+
+    /*let surface = font
+    .render("Hello Rust!")
+    .blended(Color::RGBA(255, 0, 0, 255))
+    .map_err(|e| e.to_string())?;
+    let text_texture = texture_creator
+    .create_texture_from_surface(&surface)
+    .map_err(|e| e.to_string())?;*/
