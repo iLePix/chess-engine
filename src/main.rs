@@ -15,6 +15,7 @@ use binverse::error::BinverseError;
 use board::{Board};
 use board_renderer::BoardRenderer;
 use dtos::{PlayerInfo, Move, GameInfo};
+use game::PlayerType;
 use pieces::{Piece, Side};
 use input::InputHandler;
 use renderer::Renderer;
@@ -39,7 +40,7 @@ mod input;
 
 
 use crate::color_themes::ColorTheme;
-use crate::game::{Game, Remote};
+use crate::game::{Game, Remote, GameState};
 use crate::input::Control;
 
 fn receive_mvs(mut tcp_stream: TcpStream, moves: mpsc::Sender<Move>) -> Result<(), BinverseError> {
@@ -105,6 +106,22 @@ fn connect(ip: String) -> Result<MultiplayerUtils, ConnectionError> {
 
     std::thread::spawn(|| receive_mvs(tcp_stream_clone, sender));
     Ok(MultiplayerUtils { tcp_stream, moves_rx: rx, my_side})
+}
+
+fn try_apply_remote_move(game: &mut Game) {
+    if let PlayerType::Remote(remote) = &game.turn() {
+        match remote.rx.try_recv() {
+            Ok(new_move) => {
+                println!("Receiving move {:?} for {:?}", new_move, game.turn);
+                if !game.make_move(Vec2i::new(new_move.x1 as i32, 7 - new_move.y1 as i32), Vec2i::new(new_move.x2 as i32, 7 - new_move.y2 as i32)) {
+                    panic!("Opponent move not accepted");
+                }
+                game.change_turn();
+            },
+            Err(TryRecvError::Empty) => {},
+            Err(TryRecvError::Disconnected) => panic!("Disconnected"),
+        }
+    }
 }
 
 
@@ -237,173 +254,40 @@ fn main() -> Result<(), String> {
         color_lifted = !inputs.pressed(Control::Color);
 
 
-        if inputs.left_click {
-            if let Some(selected) = board_renderer.selected && game.is_my_turn() && game.make_move(selected, cursor_field) {
-                board_renderer.unselect();
-
-            } else {
-                board_renderer.select(cursor_field, game.turn, &game.board);
-            }
-        }
-
-/*
-         if versus || mp {
-            if inputs.left_click {
-                if let Some(selected) = board_renderer.selected {
-                    match game.board.make_move(&selected, &cursor_field, game.turn) {
-                        Ok(game_state) => {
-                            game.game_state = game_state;
-                            if mp {
-                                dtos::send(
-                                    &mut game.tcp_stream, 
-                                    Move {
-                                        x1: selected.x as i8,
-                                        y1: 7 - selected.y as i8,
-                                        x2:  cursor_field.x as i8,
-                                        y2: 7 - cursor_field.y as i8
-                                    }
-                                ).expect("Could not send move");
-                            }
-                            board_renderer.unselect();
-
-                            if mp {
-                                println!("lol")
-                            }
-                        },
-                        Err(_) => println!("Invalid Move"),
-                    };
-                } else if cursor_field == board_renderer.selected.unwrap() {
-                    board_renderer.unselect();
-                } else if board_renderer.selected.is_none() {
-                    board_renderer.select(cursor_field, game.turn, &game.board);
+        match game.game_state {
+            GameState::Draw => println!("DRAW!"),
+            GameState::Winner(side) => println!("{} won!", side),
+            GameState::Running => {
+                if inputs.left_click {
+                    if let Some(selected) = board_renderer.selected && game.turn().is_me() && game.make_move(selected, cursor_field) {
+                        board_renderer.unselect();
+    
+                    } else {
+                        board_renderer.select(cursor_field, game.turn, &game.board);
+                    }
+                }
+    
+                if game.turn().is_remote() {
+                    try_apply_remote_move(&mut game);
+                }
+    
+                if let PlayerType::Cpu { depth } = game.turn() {
+                    if let Some(next_move) = &next_move_option {
+                        if next_move.is_finished() {
+                            let mv = next_move_option.take().unwrap().join().expect("Thread couldnt be joined");
+                            game.make_move(mv.0, mv.1);
+                        }
+                    } else {
+                        next_move_option = Some(spawn_move_computer(game.board.clone(), *depth as u32, game.turn));
+                    }
                 }
             }
-         }*/
-
+        }
 
 
         board_renderer.update_mouse_pos(inputs.mouse_pos);
         board_renderer.hover(cursor_field);
         board_renderer.render(&game, &mut renderer, dt);
-
-        
-
-        //KI CODE 
-        
-        /*
-
-        if let Some(mp_utils) = &mut mp_utils {
-            if inputs.left_click {
-                if board_renderer.selected.is_none() {
-                    board_renderer.select(cursor_field, mp_utils.my_side, &board);
-                } else if let Some(selected) = board_renderer.selected && mp_utils.my_side == turn && board.make_move(&selected, &cursor_field, turn).is_ok() {
-                    /*match board.make_move(&selected, &cursor_field, turn) {
-                        Ok(game_state) => todo!(),
-                        Err(_) => todo!(),
-                    }*/
-
-
-                    //broadcast move
-                    dtos::send(
-                        &mut mp_utils.tcp_stream, 
-                        Move {
-                            x1: selected.x as i8,
-                            y1: 7 - selected.y as i8,
-                            x2:  cursor_field.x as i8,
-                            y2: 7 - cursor_field.y as i8
-                        }
-                    ).expect("Could not send move");
-                    board_renderer.unselect();
-                    change_turn(&mut turn);
-                } else if cursor_field == board_renderer.selected.unwrap() {
-                    board_renderer.unselect();
-                }
-            }
-            if mp_utils.my_side != turn {
-                match mp_utils.moves_rx.try_recv() {
-                    Ok(new_move) => {
-                        println!("Receiving move {:?} for {:?}", new_move, turn);
-                        if board.make_move(&Vec2i::new(new_move.x1 as i32, 7 - new_move.y1 as i32), &Vec2i::new(new_move.x2 as i32, 7 - new_move.y2 as i32), turn).is_err() {
-                            panic!("Opponent move not accepted");
-                        }
-                        change_turn(&mut turn);
-                    },
-                    Err(TryRecvError::Empty) => {},
-                    Err(TryRecvError::Disconnected) => panic!("Disconnected"),
-                }
-            }
-            board_renderer.hover(cursor_field);
-            board_renderer.render(&mp_utils.my_side, &board, &mut renderer, dt);
-
-        } else {
-
-              //KI CODE
-            /*
-            if inputs.left_click {
-                if board_renderer.selected.is_none() {
-                    board_renderer.select(cursor_field, turn, &board);
-                } else if turn == Side::White && board.make_move(&board_renderer.selected.unwrap(), &cursor_field, turn).is_ok() {
-                    board_renderer.unselect();
-                    change_turn(&mut turn);
-                } else if cursor_field == board_renderer.selected.unwrap() {
-                    board_renderer.unselect();
-                }
-            }
-            board_renderer.hover(cursor_field);
-            board_renderer.render(&turn, &board, &mut renderer, dt);
-
-        
-
-            if turn == Side::Black {
-                if let Some(next_move) = &next_move_option {
-                    if next_move.is_finished() {
-                        let mv = next_move_option.take().unwrap().join().expect("Thread couldnt be joined");
-                        board.make_move(&mv.0, &mv.1, turn);
-                        change_turn(&mut turn);
-                    }
-                } else {
-                    next_move_option = Some(spawn_move_computer(board.clone(), 3, turn));
-                }
-            }
-
-            */
-             
-
-
-
-
-
-            //COOP CODE
-
-
-            if inputs.left_click {
-                if board_renderer.selected.is_none() {
-                    board_renderer.select(cursor_field, turn, &board);
-                } else if cursor_field == board_renderer.selected.unwrap() {
-                    board_renderer.unselect();
-                } else {
-                    match board.make_move(&board_renderer.selected.unwrap(), &cursor_field, turn) {
-                        Ok(game_state) => {
-                            match game_state {
-                                game::GameState::Running => {},
-                                game::GameState::Winner(side) => println!("Winner: {}", side),
-                                game::GameState::Draw => println!("DRAW"),
-                            }
-                            board_renderer.unselect();
-                            change_turn(&mut turn);
-                        },
-                        Err(_) => println!("Move not possilbe"),
-                    }
-                }
-            }
-            board_renderer.hover(cursor_field);
-            board_renderer.render(&turn, &board, &mut renderer, dt);
-        }
-
-        */
-
-
-
         renderer.render();
 
 
