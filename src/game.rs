@@ -12,36 +12,45 @@ pub struct Game {
     pub board: Board,
     pub game_state: GameState,
     pub possible_moves: HashMap<Vec2i, HashSet<Vec2i>>,
+    pub ty: GameType,
     pub turn: Side,
-    white: Player,
-    black: Player,
     flipped: bool
 }
 
 impl Game {
-    pub fn new(white: Player, black: Player, flipped: bool) -> Self {
+    pub fn new(ty: GameType, flipped: bool) -> Self {
         Self {
             captured_pieces: Vec::new(),
             board: Board::gen_starting_pos(),
             game_state: GameState::Running,
             possible_moves: HashMap::new(),
             turn: Side::White,
-            white,
-            black,
+            ty,
             flipped
         }
     }
 
-    pub fn from_fen(white: Player, black: Player, fen: &str, flipped: bool) -> Result<Self, FenError> {
+    pub fn versus() -> Self {
+        Self::new(GameType::Versus, false)
+    }
+
+    pub fn remote(remote: Remote, flipped: bool) -> Self {
+        Self::new(GameType::Remote(remote), flipped)
+    }
+
+    pub fn cpu(depth: usize, flipped: bool) -> Self {
+        Self::new(GameType::Cpu {depth}, flipped)
+    }
+
+    pub fn from_fen(ty: GameType, fen: &str, flipped: bool) -> Result<Self, FenError> {
         let (board, turn) = Board::from_fen(fen)?;
         Ok(Self {
             captured_pieces: Vec::new(),
             board,
             game_state: GameState::Running,
             possible_moves: HashMap::new(),
+            ty,
             turn,
-            white,
-            black,
             flipped
         })  
     }
@@ -54,9 +63,12 @@ impl Game {
     }
 
     pub fn is_my_turn(&self) -> bool {
+        if self.ty.is_versus() {
+            return true;
+        }
         match self.turn {
-            Side::Black => self.black.is_me(),
-            Side::White => self.white.is_me(),
+            Side::Black => self.flipped,
+            Side::White => !self.flipped,
         }
     }
 
@@ -80,21 +92,22 @@ pub enum GameState {
     Draw
 }
 
-pub enum Player {
-    Me,
+pub enum GameType {
+    Versus,
     Remote(Remote),
     Cpu {
         depth: usize,
-        computation: Option<JoinHandle<(Vec2i, Vec2i)>>,
+        //computation: Option<JoinHandle<(Vec2i, Vec2i)>>,
     }
 }
 
-impl Player {
-    pub fn is_me(&self) -> bool{
+
+impl GameType {
+    pub fn is_versus(&self) -> bool{
         match self {
-            Player::Me => true,
-            Player::Remote(_) => false,
-            Player::Cpu { depth, computation } => false,
+            GameType::Versus => true,
+            GameType::Remote(_) => false,
+            GameType::Cpu { depth } => false,
         }
     }
 }
@@ -104,4 +117,10 @@ impl Player {
 pub struct Remote {
     pub socket: TcpStream,
     pub rx: Receiver<Move>,
+}
+
+impl Remote {
+    pub fn new(socket: TcpStream, rx: Receiver<Move>) -> Self {
+        Self {socket, rx }
+    }
 }

@@ -39,7 +39,7 @@ mod input;
 
 
 use crate::color_themes::ColorTheme;
-use crate::game::{Game, Player, Remote};
+use crate::game::{Game, Remote};
 use crate::input::Control;
 
 fn receive_mvs(mut tcp_stream: TcpStream, moves: mpsc::Sender<Move>) -> Result<(), BinverseError> {
@@ -114,42 +114,27 @@ fn main() -> Result<(), String> {
     let mut mp = false;
 
 
-    let mut game = Game::new(Player::Me, Player::Me, false);
+    let mut game = Game::versus();
 
-
-    if let Some(ip) = ip {
+    if let Some(ip)  = ip {
         let mp_utils = match connect(ip) {
             Ok(utils) => {mp = true; utils},
             Err(err) => panic!("Error connecting: {:?}", err)
         };
-        let remote = Remote {socket: mp_utils.tcp_stream, rx: mp_utils.moves_rx };
-        let (white_player, black_player, flipped) = match mp_utils.my_side {
-            Side::Black => (Player::Remote(remote), Player::Me, true),
-            Side::White => (Player::Me, Player::Remote(remote), false),
-        };
-        game = Game::new(white_player, black_player, flipped);
+        game = Game::remote(
+            Remote::new(mp_utils.tcp_stream, mp_utils.moves_rx), 
+            match mp_utils.my_side {
+                Side::Black => true,
+                Side::White => false,
+            }
+        );
     }
 
     if let Some(depth) = ai {
         let mut rng = rand::thread_rng();
         let is_white: bool = rng.gen();
-        let cpu = Player::Cpu { depth, computation: None};
-        let (white_player, black_player) = match is_white {
-            true => (Player::Me, cpu),
-            false => (cpu, Player::Me),
-        };
-        game = Game::new(Player::Me, Player::Me, !is_white);
+        game = Game::cpu(depth, is_white)
     }
-
-    if let Some(fen) = fen {
-        (game.board, game.turn) = match Board::from_fen(&fen) {
-            Ok(r) => r,
-            Err(err) => panic!("Error with fen: {:?}", err)
-        }
-    }
-
-
-
 
 
 
@@ -255,6 +240,7 @@ fn main() -> Result<(), String> {
         if inputs.left_click {
             if let Some(selected) = board_renderer.selected && game.is_my_turn() && game.make_move(selected, cursor_field) {
                 board_renderer.unselect();
+
             } else {
                 board_renderer.select(cursor_field, game.turn, &game.board);
             }
