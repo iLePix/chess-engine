@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use sdl2::keyboard::Keycode;
+use sdl2::{keyboard::Keycode, EventPump, event::Event};
 use vecm::vec::*;
 
 
@@ -11,7 +11,9 @@ pub struct InputHandler {
     pub right_click: bool,
     pub mouse_pos: Vec2u,
     mouse_delta: Vec2i,
-    mouse_wheel_delta: i32
+    mouse_wheel_delta: i32,
+    pub window_size: Vec2u,
+    pub quit: bool,
 }
 
 
@@ -75,7 +77,9 @@ impl InputHandler {
             right_click: false,
             mouse_pos: Vec2u::zero(), 
             mouse_delta: Vec2i::zero(),
-            mouse_wheel_delta: 0
+            mouse_wheel_delta: 0,
+            window_size: Vec2u::zero(),
+            quit: false 
         }
     }
 
@@ -129,4 +133,40 @@ impl InputHandler {
         self.mouse_delta = Vec2i::zero();
         self.mouse_wheel_delta = 0;
     } 
+
+    pub fn handle_events(&mut self, event_pump: &mut EventPump) {
+        for event in event_pump.poll_iter() {
+            match event {
+                Event::MouseMotion {x, y, ..} => {
+                    self.mouse_pos.x = x as u32;
+                    self.mouse_pos.y = y as u32;
+                },
+                Event::Window { win_event, .. } => match win_event {
+                    sdl2::event::WindowEvent::SizeChanged(w, h) => {self.window_size.x = w as u32; self.window_size.y = h as u32},
+                    sdl2::event::WindowEvent::Resized(w, h) => {self.window_size.x = w as u32; self.window_size.y = h as u32},
+                    _ => (),
+                },
+                Event::Quit {..} => {
+                    self.quit = true;
+                },
+                Event::KeyDown { keycode, .. } => {
+                    if let Some(key) = keycode {
+                        self.set_key(key, true);
+                    }
+                },
+                Event::KeyUp{ keycode, .. } => {
+                    if let Some(key) = keycode {
+                        self.set_key(key, false);
+                    }
+                },
+                Event::MouseButtonDown{ mouse_btn, ..} => {
+                    self.mouse_down(mouse_btn)
+                },
+                Event::MouseButtonUp{ mouse_btn, ..} => {
+                    self.mouse_up(mouse_btn)
+                },
+                _ => {}
+            }
+        }
+    }
 }

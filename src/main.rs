@@ -111,6 +111,7 @@ fn connect(ip: String) -> Result<MultiplayerUtils, ConnectionError> {
 fn main() -> Result<(), String> {
     let mut args = std::env::args();
     let (versus, server, ai, ip, fen) = parse_args(&mut args);
+    let mut mp = false;
 
 
     let mut game = Game::new(Player::Me, Player::Me, false);
@@ -118,7 +119,7 @@ fn main() -> Result<(), String> {
 
     if let Some(ip) = ip {
         let mp_utils = match connect(ip) {
-            Ok(utils) => utils,
+            Ok(utils) => {mp = true; utils},
             Err(err) => panic!("Error connecting: {:?}", err)
         };
         let remote = Remote {socket: mp_utils.tcp_stream, rx: mp_utils.moves_rx };
@@ -185,20 +186,15 @@ fn main() -> Result<(), String> {
     let field_size = 50;
     let board_size = Vec2u::fill(8);
 
-    let themes = [ColorTheme::blue_theme(), ColorTheme::green_theme(), ColorTheme::red_theme()];
-    let mut theme_index = 0;
     let mut color_lifted = true;
 
     let mut renderer = Renderer::new(&tex_atlas, 200.0, &mut canvas);
-    println!("{}'s turn", game.turn);
     game.board.calculate_valid_moves(game.turn);
-    let mut board_renderer = BoardRenderer::new(field_size, &themes[theme_index], board_size, 2.0);
+    let mut board_renderer = BoardRenderer::new(field_size, board_size, 2.0);
 
 
 
     let mut last_frame_time = Instant::now();
-    let mut s_tick = 0.0;
-    let s_tick_increment = 200.0;
 
 
 
@@ -238,77 +234,73 @@ fn main() -> Result<(), String> {
         let dt = (current_frame_time - last_frame_time).as_secs_f32();
         last_frame_time = current_frame_time;
 
-
-        for event in event_pump.poll_iter() {
-            match event {
-                Event::MouseMotion {x, y, ..} => {
-                    inputs.mouse_pos.x = x as u32;
-                    inputs.mouse_pos.y = y as u32;
-                },
-                Event::Window { win_event, .. } => match win_event {
-                    sdl2::event::WindowEvent::SizeChanged(w, h) => {screen_size.x = w as u32; screen_size.y = h as u32},
-                    sdl2::event::WindowEvent::Resized(w, h) => {screen_size.x = w as u32; screen_size.y = h as u32},
-                    _ => (),
-                },
-                Event::Quit {..} => {
-                    break 'running
-                },
-                Event::KeyDown { keycode, .. } => {
-                    if let Some(key) = keycode {
-                        inputs.set_key(key, true);
-                    }
-                },
-                Event::KeyUp{ keycode, .. } => {
-                    if let Some(key) = keycode {
-                        inputs.set_key(key, false);
-                    }
-                },
-                Event::MouseButtonDown{ mouse_btn, ..} => {
-                    inputs.mouse_down(mouse_btn)
-                },
-                Event::MouseButtonUp{ mouse_btn, ..} => {
-                    inputs.mouse_up(mouse_btn)
-                },
-                _ => {}
-            }
+        inputs.handle_events(&mut event_pump);
+        if inputs.quit {
+            break; // break 'running
         }
 
         
         let cursor_field = (inputs.mouse_pos / field_size).vec_into();
 
-        if inputs.pressed(Control::Escape) {
-            board_renderer.unselect();
-        }
-
         //colortheme
         if inputs.pressed(Control::Color) && color_lifted {
-            if theme_index + 1 > themes.len() - 1 {
-                theme_index = 0;
-            } else {
-                theme_index += 1;
-            }
-            board_renderer.update_color_theme(&themes[theme_index]);
+            board_renderer.next_theme();
+        }
+        if inputs.pressed(Control::Escape) {
+            board_renderer.unselect();
         }
         color_lifted = !inputs.pressed(Control::Color);
 
 
-
-
-        
         if inputs.left_click {
-            if board_renderer.selected.is_none() {
+            if let Some(selected) = board_renderer.selected && game.is_my_turn() && game.make_move(selected, cursor_field) {
+                board_renderer.unselect();
+            } else {
                 board_renderer.select(cursor_field, game.turn, &game.board);
-            } else if let Some(selected) = board_renderer.selected && game.board.make_move(&selected, &cursor_field, game.turn).is_ok() {
-                board_renderer.unselect();
-                game.change_turn();
-            } else if cursor_field == board_renderer.selected.unwrap() {
-                board_renderer.unselect();
             }
         }
+
+/*
+         if versus || mp {
+            if inputs.left_click {
+                if let Some(selected) = board_renderer.selected {
+                    match game.board.make_move(&selected, &cursor_field, game.turn) {
+                        Ok(game_state) => {
+                            game.game_state = game_state;
+                            if mp {
+                                dtos::send(
+                                    &mut game.tcp_stream, 
+                                    Move {
+                                        x1: selected.x as i8,
+                                        y1: 7 - selected.y as i8,
+                                        x2:  cursor_field.x as i8,
+                                        y2: 7 - cursor_field.y as i8
+                                    }
+                                ).expect("Could not send move");
+                            }
+                            board_renderer.unselect();
+
+                            if mp {
+                                println!("lol")
+                            }
+                        },
+                        Err(_) => println!("Invalid Move"),
+                    };
+                } else if cursor_field == board_renderer.selected.unwrap() {
+                    board_renderer.unselect();
+                } else if board_renderer.selected.is_none() {
+                    board_renderer.select(cursor_field, game.turn, &game.board);
+                }
+            }
+         }*/
+
+
+
+        board_renderer.update_mouse_pos(inputs.mouse_pos);
         board_renderer.hover(cursor_field);
-        board_renderer.render(&game.turn, &game.board, &mut renderer, dt);
+        board_renderer.render(&game, &mut renderer, dt);
 
-
+        
 
         //KI CODE 
         
@@ -424,20 +416,6 @@ fn main() -> Result<(), String> {
 
         */
 
-        if let Some(piece) = board_renderer.get_selected_piece(&game.board) {
-            if s_tick + s_tick_increment*dt >= 255.0 {
-                s_tick = 0.0;
-            } else {
-                s_tick += dt * s_tick_increment as f32;
-            }
-            let p = (parabola(s_tick as i32) / 20.0);
-            let size = field_size + p as u32;
-            let dst = Rect::from_center(Point::new(inputs.mouse_pos.x as i32 , inputs.mouse_pos.y as i32), size, size);
-            renderer.draw_image(piece.ty, piece.side, dst, 3);
-        } else {
-            s_tick = 0.0;
-        }
-
 
 
         renderer.render();
@@ -452,10 +430,6 @@ fn main() -> Result<(), String> {
     Ok(())
 }
 
-
-fn parabola(x: i32) -> f32 {
-    -1.0 * (0.125 * x as f32 - 16.0).powi(2) + 256.0
-}
 
 
 

@@ -52,9 +52,28 @@ impl Game {
             Side::White => Side::Black,
         };
     }
+
+    pub fn is_my_turn(&self) -> bool {
+        match self.turn {
+            Side::Black => self.black.is_me(),
+            Side::White => self.white.is_me(),
+        }
+    }
+
+    pub fn make_move(&mut self, from: Vec2i, to: Vec2i) -> bool {
+        match self.board.make_move(&from, &to, self.turn) {
+            Ok(game_state) => {
+                self.game_state = game_state; 
+                self.change_turn(); 
+                true
+            },
+            Err(_) => false,
+        }
+    }
+
 }
 
-
+#[derive(Clone, Copy)]
 pub enum GameState {
     Running,
     Winner(Side),
@@ -67,6 +86,16 @@ pub enum Player {
     Cpu {
         depth: usize,
         computation: Option<JoinHandle<(Vec2i, Vec2i)>>,
+    }
+}
+
+impl Player {
+    pub fn is_me(&self) -> bool{
+        match self {
+            Player::Me => true,
+            Player::Remote(_) => false,
+            Player::Cpu { depth, computation } => false,
+        }
     }
 }
 
