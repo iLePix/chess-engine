@@ -91,14 +91,14 @@ impl BoardC {
             }
         } 
     }
-
+    //may be faster if positions are switched
     pub fn set_piece(&mut self, i: u8, piece: Piece) {
         if self.is_on_board(i as i8) && self.occupied.count_ones() < 32 {
-            println!("Setting piece");
             let piece_index = self.get_piece_index(i);
             self.occupied ^= (1 as u64) << i;
+            let prev = self.pieces[(piece_index / 2) as usize] << (piece_index % 2);
             let n = 1 - (piece_index % 2);
-            self.pieces[(piece_index / 2) as usize] = piece << (4 * n)
+            self.pieces[(piece_index / 2) as usize] = (piece << (4 * n)) & prev;
         }
     }
 
@@ -236,6 +236,15 @@ impl BoardC {
         pieces
     } 
 
+    //Return captured piece
+    pub fn make_move(&mut self, from: u8, to: u8) -> Option<Piece> {
+        let captured_piece = self.get_piece_at_pos(to);
+        let piece = self.get_piece_at_pos(from).expect("Tried to move non existing piece");
+        self.set_piece(piece, to);
+        self.remove_piece(from);
+        captured_piece
+    }
+
 
 
     //inclusive
@@ -285,7 +294,7 @@ impl BoardC {
         count as u8
     }
 
-    fn get_piece_at_pos(&self, i: u8) -> Option<Piece> {
+    pub fn get_piece_at_pos(&self, i: u8) -> Option<Piece> {
         if self.occupied(i) { 
              let piece_index = self.get_piece_index(i);
              let n = 1 - (piece_index % 2);

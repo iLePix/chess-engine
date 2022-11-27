@@ -10,6 +10,8 @@ pub mod dtos;
 pub mod game;
 pub mod color_themes;
 pub mod boardc;
+pub mod gamec;
+pub mod game_renderer;
 
 use atlas::TextureAtlas;
 use binverse::error::BinverseError;
@@ -158,11 +160,12 @@ fn main() -> Result<(), String> {
     bc.remove_piece(pos![0,0]);
     bc.remove_piece(pos![1,6]);
     use crate::boardc::PieceTrait;
-    //bc.set_piece(pos![3,3], boardc::Piece::from_ty_n_side(pieces::PieceType::Queen, Side::White));
+    bc.set_piece(pos![3,3], boardc::Piece::from_ty_n_side(pieces::PieceType::Queen, Side::White));
+    bc.set_piece(pos![3,2], boardc::Piece::from_ty_n_side(pieces::PieceType::Queen, Side::White));
     ec = bc.evaluate(Side::White);
     let mut board_clone = bc; 
 
-    //bc.print_board();
+    bc.print_board();
 
     let d_t2 = (Instant::now() - c_t2).as_micros();
     println!(" trying to be right: {}", ec);
