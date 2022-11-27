@@ -285,11 +285,16 @@ impl Board {
                 self.move_piece(&piece_pos, &dst, turn);   
                 let (total_moves_pre_check, total_moves_post_check) = self.calculate_valid_moves(!turn);
                 self.check = self.is_check();
+                let (white_is_check, black_is_check) = self.check;
+                let check = match !turn {
+                    Side::Black => black_is_check,
+                    Side::White => white_is_check,
+                };
                 
-                if total_moves_pre_check == 0 {
+                if total_moves_pre_check == 0  || (total_moves_post_check == 0 && !check) {
                     return Ok(GameState::Draw)
                 } else if total_moves_post_check == 0 {
-                    return Ok(GameState::Winner((turn)))
+                    return Ok(GameState::Winner(turn))
                 }
 
                 return Ok(GameState::Running)

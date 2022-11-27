@@ -9,6 +9,7 @@ pub mod board_renderer;
 pub mod dtos;
 pub mod game;
 pub mod color_themes;
+pub mod boardc;
 
 use atlas::TextureAtlas;
 use binverse::error::BinverseError;
@@ -39,6 +40,7 @@ use rand::Rng;
 mod input; 
 
 
+use crate::boardc::BoardC;
 use crate::color_themes::ColorTheme;
 use crate::game::{Game, Remote, GameState};
 use crate::input::Control;
@@ -55,17 +57,24 @@ struct MultiplayerUtils {
     my_side: Side,
 }
 
-fn parse_args(args: &mut Args) -> (bool, bool, Option<usize>, Option<String>, Option<String>){
+fn parse_args(args: &mut Args) -> (bool, bool, Option<usize>, Option<usize>, Option<String>, Option<String>){
     args.skip(1);
     let mut versus = true;
     let mut server = false;
     let mut ai = None;
     let mut ip = None;
     let mut fen = None;
+    let mut vai = None;
     while let Some(arg) = args.next() {
         match arg.as_str() {
             "-s" | "--server" => panic!("Not available at the moment"),//server = true,
             "-a" | "--ai" => ai = Some(
+                args.next()
+                    .expect("give ai depth as argument")
+                    .parse::<usize>()
+                    .expect("depth has to be a positive integer")
+                ),
+            "-v" | "--vai" => vai = Some(
                 args.next()
                     .expect("give ai depth as argument")
                     .parse::<usize>()
@@ -76,7 +85,7 @@ fn parse_args(args: &mut Args) -> (bool, bool, Option<usize>, Option<String>, Op
             _ => eprintln!("unrecognized arg {arg}"),
         }
     }
-    (versus, server, ai, ip, fen)
+    (versus, server, ai, vai, ip, fen)
 } 
 
 #[derive(Debug)]
@@ -127,11 +136,46 @@ fn try_apply_remote_move(game: &mut Game) {
 
 fn main() -> Result<(), String> {
     let mut args = std::env::args();
-    let (versus, server, ai, ip, fen) = parse_args(&mut args);
+    let (versus, server, ai, vai, ip, fen) = parse_args(&mut args);
     let mut mp = false;
+
+    
+    //test
+    let mut e =0; 
+    let c_t = Instant::now();
+    let mut e = 0;
+    let mut b = Board::gen_starting_pos();
+    b.remove_piece(&Vec2i::fill(0));
+    b.remove_piece(&Vec2i::new(1,6));
+    e = b.evaluate(Side::White);
+
+    let d_t = (Instant::now() - c_t).as_micros();
+    println!("right: {}", e);
+
+    let mut ec = 0;
+    let c_t2 = Instant::now();
+    let mut bc = BoardC::gen_starting_pos();
+    bc.remove_piece(pos![0,0]);
+    bc.remove_piece(pos![1,6]);
+    use crate::boardc::PieceTrait;
+    //bc.set_piece(pos![3,3], boardc::Piece::from_ty_n_side(pieces::PieceType::Queen, Side::White));
+    ec = bc.evaluate(Side::White);
+    let mut board_clone = bc; 
+
+    //bc.print_board();
+
+    let d_t2 = (Instant::now() - c_t2).as_micros();
+    println!(" trying to be right: {}", ec);
+    println!("Pieces Evaluation function and board creation difference: {} us", (d_t - d_t2));
+    
+    panic!("");
+
+
+
 
 
     let mut game = Game::versus();
+
 
     if let Some(ip)  = ip {
         let mp_utils = match connect(ip) {
@@ -151,6 +195,17 @@ fn main() -> Result<(), String> {
         let mut rng = rand::thread_rng();
         let is_white: bool = rng.gen();
         game = Game::cpu(depth, is_white)
+    }
+
+    if let Some(depth) = vai {
+        game = Game::vcpu(depth)
+    }
+
+    if let Some(fen) = fen {
+       match Board::from_fen(&fen) {
+        Ok((b,t)) => {game.board = b; game.turn = t},
+        Err(err) => println!("Fen error: {:?}", err),
+    }
     }
 
 
@@ -200,25 +255,46 @@ fn main() -> Result<(), String> {
 
 
 
-    fn spawn_move_computer(board: Board, depth: u32, turn: Side) -> JoinHandle<(Vec2i, Vec2i)> { 
+    fn spawn_move_computer(board: Board, depth: usize, turn: Side) -> JoinHandle<(Vec2i, Vec2i)> { 
         std::thread::spawn(move || {
-            compute_best_move(&board, depth, turn).0
+            compute_best_move(&board, depth, turn, true).0
         })
     }
 
+    /*fn minimax(board: &Board, depth: usize, maximizing_side: Side) -> i32 {
+        if depth == 0 { //or game is over
+            return board.evaluate(maximizing_side) // maximzing side right?
+        }
+
+    }*/
 
 
-    fn compute_best_move(board: &Board, depth: u32, turn: Side) -> ((Vec2i, Vec2i), i32){
+
+    fn compute_best_move(board: &Board, depth: usize, turn: Side, is_top: bool) -> ((Vec2i, Vec2i), i32) { 
         let next_moves_by_piece = board.valid_moves.clone();
         let mut best_move = ((Vec2i::zero(), Vec2i::zero()), std::i32::MIN);
+        let mut progress = 0;
+        let total: i32 = next_moves_by_piece.iter().map(|(_,v)| v.len() as i32).sum();
         for (piece_pos, mvs) in next_moves_by_piece {
             for dst in mvs {
+                if is_top {
+                    progress +=1;
+                    println!("{} / {}", progress, total)
+                }
                 let mut board = board.clone();
-                board.make_move(&piece_pos, &dst, turn);
-                let eval = if depth == 0 {
-                    board.evaluate(turn)
-                } else {
-                    -compute_best_move(&board, depth - 1, !turn).1
+                let eval = match board.make_move(&piece_pos, &dst, turn) {
+                    Ok(game_state) => {
+                        match game_state {
+                            GameState::Running => {if depth == 0 {
+                                board.evaluate(turn)
+                            } else {
+                                -compute_best_move(&board, depth - 1, !turn, false).1
+                            }},
+                            GameState::Winner(side) => {if turn == side {i32::MAX} else {i32::MIN}}
+                            GameState::Draw => i32::MIN,
+                        }
+                    },
+                    Err(_) => {0},
                 };
                 if eval > best_move.1 {
                     best_move = ((piece_pos, dst), eval);
@@ -261,6 +337,7 @@ fn main() -> Result<(), String> {
                 if inputs.left_click {
                     if let Some(selected) = board_renderer.selected && game.turn().is_me() && game.make_move(selected, cursor_field) {
                         board_renderer.unselect();
+
     
                     } else {
                         board_renderer.select(cursor_field, game.turn, &game.board);
@@ -278,7 +355,7 @@ fn main() -> Result<(), String> {
                             game.make_move(mv.0, mv.1);
                         }
                     } else {
-                        next_move_option = Some(spawn_move_computer(game.board.clone(), *depth as u32, game.turn));
+                        next_move_option = Some(spawn_move_computer(game.board.clone(), *depth, game.turn));
                     }
                 }
             }

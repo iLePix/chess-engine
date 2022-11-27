@@ -50,6 +50,12 @@ impl Game {
         Self::new(white, black, is_white)
     }
 
+    pub fn vcpu(depth: usize) -> Self {
+        let cpu1 = PlayerType::Cpu {depth};
+        let cpu2 = PlayerType::Cpu {depth};
+        Self::new(cpu1, cpu2, false)
+    }
+
     pub fn from_fen(white: PlayerType, black: PlayerType, fen: &str, flipped: bool) -> Result<Self, FenError> {
         let (board, turn) = Board::from_fen(fen)?;
         Ok(Self {
@@ -77,12 +83,22 @@ impl Game {
             Side::White => &self.white,
         }
     }
+    pub fn turn_mut(&mut self) -> &mut PlayerType {
+        match self.turn {
+            Side::Black => &mut self.black,
+            Side::White => &mut self.white,
+        }
+    }
 
     pub fn make_move(&mut self, from: Vec2i, to: Vec2i) -> bool {
         match self.board.make_move(&from, &to, self.turn) {
             Ok(game_state) => {
                 self.game_state = game_state; 
                 self.change_turn();
+                if let PlayerType::Remote(remote) = &mut self.turn_mut() {
+                    dtos::send(&mut remote.socket, Move {x1: from.x as i8, x2: to.x as i8, y1: from.y as i8, y2: to.y as i8})
+                        .expect("Failed to send move")
+                };
                 true
             },
             Err(_) => false,

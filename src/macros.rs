@@ -15,3 +15,12 @@ macro_rules! count {
     ( $x:tt $($xs:tt)* ) => (1usize + count!($($xs)*));
 }
 
+#[macro_export]
+macro_rules! pos {
+       ($x:expr,$y:expr)=>{
+           {
+               $x+$y*8
+           }
+       }
+   }
+   

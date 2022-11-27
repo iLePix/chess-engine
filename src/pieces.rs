@@ -2,6 +2,7 @@ use std::{ops::Not, fmt::{Display, write}};
 
 
 #[derive(Clone, Copy, PartialEq, Debug)]
+#[repr(u8)]
 pub enum PieceType {
     Queen,
     King,
