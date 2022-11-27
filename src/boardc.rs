@@ -1,4 +1,4 @@
-use std::cmp::{min, max};
+use std::{cmp::{min, max}, slice::Iter};
 
 use crate::{pieces::{Side, PieceType}, pos};
 
@@ -57,14 +57,6 @@ impl BoardC {
         let black_castle = (true, true);
         let en_passant = 0b11111111u8;
 
-
-        /*for pieces in pieces {
-            let first_piece = pieces >> 4;
-            println!("{:?} {}", first_piece.ty().unwrap(), first_piece.side());
-            let second_piece = 0b00001111u8 & pieces;
-            println!("{:?} {}", second_piece.ty().unwrap(), second_piece.side());
-        }*/
-
         Self {
             occupied,
             pieces,
@@ -101,7 +93,7 @@ impl BoardC {
     }
 
     pub fn set_piece(&mut self, i: u8, piece: Piece) {
-        if self.is_on_board(i) && self.occupied.count_ones() < 32 {
+        if self.is_on_board(i as i8) && self.occupied.count_ones() < 32 {
             println!("Setting piece");
             let piece_index = self.get_piece_index(i);
             self.occupied ^= (1 as u64) << i;
@@ -110,7 +102,141 @@ impl BoardC {
         }
     }
 
-    
+    fn valid_moves_for_piece(&self, i: u8) -> u64 {
+        let mut valid_moves = 0;
+        let piece = self.get_piece_at_pos(i).expect("Tried to calculate moves for non-existing piece");
+
+        let add_pos = |pos: u8, valid_mvs: &mut u64| {
+            *valid_mvs ^= 1 << pos
+        };
+
+        let moves_in_dir = |dir: i8, valid_mvs: &mut u64| {
+            let mut new_pos = i as i8 + dir;
+            while self.is_on_board(new_pos) {
+                if let Some(other_piece) = self.get_piece_at_pos(new_pos as u8) {
+                    if other_piece.side() != piece.side() {
+                        add_pos(new_pos as u8, valid_mvs);
+                    }
+                    break;
+                } else {
+                    add_pos(new_pos as u8, valid_mvs);
+                }
+                new_pos += dir
+            }
+        };
+
+        let rook = |valid_mvs: &mut u64| {
+            moves_in_dir(pos![0,1], valid_mvs);
+            moves_in_dir(pos![-1,0], valid_mvs);
+            moves_in_dir(pos![0,1], valid_mvs);
+            moves_in_dir(pos![0,-1], valid_mvs);
+        };
+
+        let bishop = |valid_mvs: &mut u64| {
+            moves_in_dir(pos![1,1], valid_mvs);
+            moves_in_dir(pos![-1,1], valid_mvs);
+            moves_in_dir(pos![1,-1], valid_mvs);
+            moves_in_dir(pos![1,-1], valid_mvs);
+        };
+
+        let queen = |valid_mvs: &mut u64| {
+            bishop(valid_mvs);
+            rook(valid_mvs);
+        };
+
+        let knight = |valid_mvs: &mut u64| {
+            let possible_moves = [
+                pos!(-1, 2),
+                pos!(1, 2),
+
+                pos!(-1, -2),
+                pos!(1, -2),
+
+                pos!(2, 1),
+                pos!(2, -1),
+
+                pos!(-2, 1),
+                pos!(-2, -1),
+            ];
+            for mv in possible_moves {
+                let new_pos = i as i8 + mv;
+                if self.is_on_board(new_pos) {
+                    match self.get_piece_at_pos(new_pos as u8) {
+                        Some(other_piece) => if other_piece.side() == piece.side() {continue;},
+                        None => {}
+                    }
+                    add_pos(new_pos as u8, valid_mvs);
+                }
+            }
+        };
+
+        let king = |valid_mvs: &mut u64| {
+            for x in -1..=1 {
+                for y in -1..=1 {
+                    let new_pos = i as i8 + pos!(x, y);
+                    if self.is_on_board(new_pos) {
+                        if let Some(other_piece) = self.get_piece_at_pos(new_pos as u8) {
+                            if other_piece.side() == piece.side() {
+                                continue;
+                            }
+                        }
+                        add_pos(new_pos as u8, valid_mvs);
+                    }
+                }
+            }
+        };
+
+        let pawn = |valid_mvs: &mut u64| {
+            bishop(valid_mvs);
+            rook(valid_mvs);
+        };
+
+
+        match piece.ty().expect("Tried to calculate moves for none piece") {
+            PieceType::Queen => queen(&mut valid_moves),
+            PieceType::King => king(&mut valid_moves),
+            PieceType::Knight => knight(&mut valid_moves),
+            PieceType::Bishop => bishop(&mut valid_moves),
+            PieceType::Rook => rook(&mut valid_moves),
+            PieceType::Pawn => pawn(&mut valid_moves),
+        }
+        valid_moves
+    }    
+
+
+    pub fn valid_moves(&self, side: Side) -> [u64; 16] {
+        let mut mvs = [0; 16];
+        let mut i = 0;
+        for n in 0..=63 {
+            if let Some(piece) = self.get_piece_at_pos(n) && piece.side() == side {
+                mvs[i] = self.valid_moves_for_piece(n);
+                i += 1;
+            }
+        }
+        mvs
+    }
+
+    pub fn find_king(&self, side: Side) -> Option<u8> {
+        for (i, piece) in self.pieces_uncrompressed().iter().enumerate() {
+            if let Some(ty) = piece.ty() && ty == PieceType::King && piece.side() == side {
+                return self.get_piece_at_pos(i as u8);
+            }
+        }
+        None
+    }
+
+    fn pieces_uncrompressed(&self) ->  [Piece; 32] {
+        let mut pieces = [0 as Piece; 32]; 
+        for (i, two_pieces) in self.pieces.iter().enumerate() {
+            let first = two_pieces >> 4;
+            let second = 0b00001111u8 & two_pieces;
+            pieces[i*2] = first;
+            pieces[(i*2) + 1] = second;
+        }
+        pieces
+    } 
+
+
 
     //inclusive
     fn space_occupied(&self, from: u8, to: u8) -> bool {
@@ -125,8 +251,8 @@ impl BoardC {
         false
     }
 
-    fn is_on_board(&self, i: u8) -> bool {
-        i < 64
+    fn is_on_board(&self, i: i8) -> bool {
+        i >= 0 && i < 64
     }
 
 
@@ -141,6 +267,21 @@ impl BoardC {
         for n in 0..i {
             count += self.occupied >> n & 1
         }
+        count as u8
+    }
+
+    //returns pos in occupied of the i's number
+    //i = piece_index, find the (i+1) 1 
+    fn get_piece_pos(&self, i: u8) -> u8 {
+        let mut count = 0;
+        for n in 0..=63 {
+            count += self.occupied >> n & 1;
+            if count == (i+1) as u64 {
+                return n
+            }
+        }
+        //this should never happen
+        panic!("A thing that should never have happend, happend");
         count as u8
     }
 
