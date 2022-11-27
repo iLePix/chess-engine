@@ -69,10 +69,10 @@ impl BoardC {
     pub fn remove_piece(&mut self, i: u8) {
         if self.occupied(i) {
             self.occupied ^= (1 as u64) << i;
-            let pieces_left = self.occupied.count_ones();
+            //let pieces_left = self.occupied.count_ones();
             let piece_index = self.get_piece_index(i);
             let n = 1 - (i % 2);
-            let no_piece = 0b00001111u8 << (4 * n);
+            //let no_piece = 0b00001111u8 << (4 * n);
 
             let num_of_pieces = 32;
             let a_shift = (num_of_pieces - piece_index) * 4;
@@ -94,8 +94,19 @@ impl BoardC {
     //may be faster if positions are switched
     pub fn set_piece(&mut self, i: u8, piece: Piece) {
         if self.is_on_board(i as i8) && self.occupied.count_ones() < 32 {
+            println!("{:?}, {} at: {}", piece.ty().unwrap(), piece.side(), i);
+            
+            if self.occupied(i) {
+                //just insert at position
+                let piece_index = self.get_piece_index(i);
+                let prev = self.pieces[(piece_index / 2) as usize] << (piece_index % 2);
+                let n = 1 - (piece_index % 2);
+                self.pieces[(piece_index / 2) as usize] = (piece << (4 * n)) & prev;
+            } else {
+                self.occupied |= (1 as u64) << i;
+            }
             let piece_index = self.get_piece_index(i);
-            self.occupied ^= (1 as u64) << i;
+            println!("{}", piece_index);
             let prev = self.pieces[(piece_index / 2) as usize] << (piece_index % 2);
             let n = 1 - (piece_index % 2);
             self.pieces[(piece_index / 2) as usize] = (piece << (4 * n)) & prev;
@@ -240,8 +251,8 @@ impl BoardC {
     pub fn make_move(&mut self, from: u8, to: u8) -> Option<Piece> {
         let captured_piece = self.get_piece_at_pos(to);
         let piece = self.get_piece_at_pos(from).expect("Tried to move non existing piece");
-        self.set_piece(piece, to);
         self.remove_piece(from);
+        self.set_piece(to, piece);
         captured_piece
     }
 

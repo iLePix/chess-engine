@@ -92,8 +92,9 @@ impl GameC {
 
 
     pub fn make_move(&mut self, from: u8, to: u8) {
-        let moves_for_pieces = self.possible_moves[from as usize];
-        if moves_for_pieces & (1 << to) != 0 { //checks if move is in possible moves
+        //let piece_index = self.board.get_piece_index(from);
+        //let moves_for_pieces = self.possible_moves[from as usize];
+        if true { //moves_for_pieces & (1 << to) != 0 { //checks if move is in possible moves
             if let Some(captured_piece) = self.board.make_move(from, to) {
                 self.captured_pieces.push(captured_piece);
             }

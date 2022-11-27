@@ -17,6 +17,7 @@ use atlas::TextureAtlas;
 use binverse::error::BinverseError;
 use board::{Board};
 use board_renderer::BoardRenderer;
+use game_renderer::GameRenderer;
 use dtos::{PlayerInfo, Move, GameInfo};
 use game::PlayerType;
 use pieces::{Piece, Side};
@@ -45,6 +46,7 @@ mod input;
 use crate::boardc::BoardC;
 use crate::color_themes::ColorTheme;
 use crate::game::{Game, Remote, GameState};
+use crate::gamec::GameC;
 use crate::input::Control;
 
 fn receive_mvs(mut tcp_stream: TcpStream, moves: mpsc::Sender<Move>) -> Result<(), BinverseError> {
@@ -141,42 +143,7 @@ fn main() -> Result<(), String> {
     let (versus, server, ai, vai, ip, fen) = parse_args(&mut args);
     let mut mp = false;
 
-    
-    //test
-    let mut e =0; 
-    let c_t = Instant::now();
-    let mut e = 0;
-    let mut b = Board::gen_starting_pos();
-    b.remove_piece(&Vec2i::fill(0));
-    b.remove_piece(&Vec2i::new(1,6));
-    e = b.evaluate(Side::White);
-
-    let d_t = (Instant::now() - c_t).as_micros();
-    println!("right: {}", e);
-
-    let mut ec = 0;
-    let c_t2 = Instant::now();
-    let mut bc = BoardC::gen_starting_pos();
-    bc.remove_piece(pos![0,0]);
-    bc.remove_piece(pos![1,6]);
-    use crate::boardc::PieceTrait;
-    bc.set_piece(pos![3,3], boardc::Piece::from_ty_n_side(pieces::PieceType::Queen, Side::White));
-    bc.set_piece(pos![3,2], boardc::Piece::from_ty_n_side(pieces::PieceType::Queen, Side::White));
-    ec = bc.evaluate(Side::White);
-    let mut board_clone = bc; 
-
-    bc.print_board();
-
-    let d_t2 = (Instant::now() - c_t2).as_micros();
-    println!(" trying to be right: {}", ec);
-    println!("Pieces Evaluation function and board creation difference: {} us", (d_t - d_t2));
-    
-    panic!("");
-
-
-
-
-
+    let mut gamec = GameC::versus();
     let mut game = Game::versus();
 
 
@@ -251,6 +218,7 @@ fn main() -> Result<(), String> {
     let mut renderer = Renderer::new(&tex_atlas, 200.0, &mut canvas);
     game.board.calculate_valid_moves(game.turn);
     let mut board_renderer = BoardRenderer::new(field_size, board_size, 2.0);
+    let mut game_renderer = GameRenderer::new(field_size, board_size, 100.0);
 
 
 
@@ -321,19 +289,34 @@ fn main() -> Result<(), String> {
         }
 
         
-        let cursor_field = (inputs.mouse_pos / field_size).vec_into();
+        let cursor_field_xy = (inputs.mouse_pos / field_size);
+        let cursor_field = pos!(cursor_field_xy.x,cursor_field_xy.y) as u8;
 
         //colortheme
         if inputs.pressed(Control::Color) && color_lifted {
-            board_renderer.next_theme();
+            game_renderer.next_theme();
         }
         if inputs.pressed(Control::Escape) {
-            board_renderer.unselect();
+            game_renderer.unselect();
         }
         color_lifted = !inputs.pressed(Control::Color);
 
+        if inputs.left_click {
+            if let Some(selected) = game_renderer.selected && gamec.turn().is_me() {
+                gamec.make_move(selected, cursor_field);
+                game_renderer.unselect();
 
-        match game.game_state {
+            } else {
+                game_renderer.select(cursor_field, gamec.turn, &gamec.board);
+            }
+        }
+
+        game_renderer.update_mouse_pos(inputs.mouse_pos);
+        game_renderer.render(&gamec, &mut renderer, dt);
+        renderer.render();
+
+
+        /*match game.game_state {
             GameState::Draw => println!("DRAW!"),
             GameState::Winner(side) => println!("{} won!", side),
             GameState::Running => {
@@ -368,7 +351,7 @@ fn main() -> Result<(), String> {
         board_renderer.update_mouse_pos(inputs.mouse_pos);
         board_renderer.hover(cursor_field);
         board_renderer.render(&game, &mut renderer, dt);
-        renderer.render();
+        renderer.render();*/
 
 
         use sdl2::mouse::MouseButton::*;

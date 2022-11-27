@@ -7,7 +7,7 @@ use crate::{color_themes::ColorTheme, boardc::{Piece, BoardC, PieceTrait}, piece
 
 
 
-struct GameRenderer {
+pub  struct GameRenderer {
     board_ground: Vec<(Rect, Color)>,
     //hovering: Option<u8>,
     field_size: u32,
