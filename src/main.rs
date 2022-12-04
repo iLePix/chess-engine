@@ -208,12 +208,13 @@ fn main() -> Result<(), String> {
     let chess_pieces = &Path::new("../../res/chess_pieces.png");
     let texture_creator = canvas.texture_creator();
     let pieces_texture = texture_creator.load_texture(chess_pieces)?;
-    let tex_atlas = TextureAtlas::new(&pieces_texture, 90);
+    let mut tex_atlas = TextureAtlas::new(&pieces_texture, 90);
 
     let field_size = 50;
     let board_size = Vec2u::fill(8);
 
     let mut color_lifted = true;
+    let mut pieces_lifted = true;
 
     let mut renderer = Renderer::new(&tex_atlas, 200.0, &mut canvas);
     game.board.calculate_valid_moves(game.turn);
@@ -285,21 +286,25 @@ fn main() -> Result<(), String> {
 
         inputs.handle_events(&mut event_pump);
         if inputs.quit {
-            break; // break 'running
+            break 'running;
         }
 
         
-        let cursor_field_xy = (inputs.mouse_pos / field_size);
+        let cursor_field_xy = inputs.mouse_pos / field_size;
         let cursor_field = pos!(cursor_field_xy.x,cursor_field_xy.y) as u8;
 
         //colortheme
         if inputs.pressed(Control::Color) && color_lifted {
             game_renderer.next_theme();
         }
+        if inputs.pressed(Control::Pieces) && pieces_lifted {
+            tex_atlas.next_theme();
+        }
         if inputs.pressed(Control::Escape) {
             game_renderer.unselect();
         }
         color_lifted = !inputs.pressed(Control::Color);
+        pieces_lifted = !inputs.pressed(Control::Pieces);
 
         if inputs.left_click {
             if let Some(selected) = game_renderer.selected && gamec.turn().is_me() {

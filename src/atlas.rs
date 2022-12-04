@@ -33,4 +33,8 @@ impl<'a> TextureAtlas<'a> {
         };
         return Rect::new(lr_res_cords.x * self.fig_src_size as i32, lr_res_cords.y * self.fig_src_size as i32,self.fig_src_size, self.fig_src_size);
     }
+
+    pub fn next_theme(&self) {
+        println!("TextureAtlas: Next theme")
+    }
 }

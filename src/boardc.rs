@@ -40,14 +40,14 @@ impl BoardC {
         for (i, pieces_slice) in b_second_rank.chunks(2).enumerate() {
             pieces[i] = combine_pieces(pieces_slice[0], pieces_slice[1])
         }
-        for i in 4..=7 {
+        /*for i in 4..=7 {
             pieces[i] = combine_pieces(b_pawn, b_pawn)
-        }
+        }*/
 
         let w_pawn = b_pawn.to_white();
-        for i in 8..=11 {
+        /*for i in 8..=11 {
             pieces[i] = combine_pieces(w_pawn, w_pawn)
-        }
+        }*/
 
         for (i, pieces_slice) in w_second_rank.chunks(2).enumerate() {
             pieces[i + 12] = combine_pieces(pieces_slice[0], pieces_slice[1])
@@ -99,17 +99,21 @@ impl BoardC {
             if self.occupied(i) {
                 //just insert at position
                 let piece_index = self.get_piece_index(i);
-                let prev = self.pieces[(piece_index / 2) as usize] << (piece_index % 2);
+                println!("piece_ index{} ", piece_index);
+                let a = 0b00001111u8 << (piece_index % 2) * 4;
+                let prev = self.pieces[(piece_index / 2) as usize] & a;
+                println!("{:#010b} ", prev);
                 let n = 1 - (piece_index % 2);
-                self.pieces[(piece_index / 2) as usize] = (piece << (4 * n)) & prev;
+                println!("{:#010b} ", (piece << (4 * n)) | prev);
+                self.pieces[(piece_index / 2) as usize] = (piece << (4 * n)) | prev;
             } else {
-                self.occupied |= (1 as u64) << i;
+                //self.occupied |= (1 as u64) << i;
             }
-            let piece_index = self.get_piece_index(i);
+            /*let piece_index = self.get_piece_index(i);
             println!("{}", piece_index);
             let prev = self.pieces[(piece_index / 2) as usize] << (piece_index % 2);
             let n = 1 - (piece_index % 2);
-            self.pieces[(piece_index / 2) as usize] = (piece << (4 * n)) & prev;
+            self.pieces[(piece_index / 2) as usize] = (piece << (4 * n)) & prev;*/
         }
     }
 
