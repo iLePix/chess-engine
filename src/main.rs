@@ -12,6 +12,9 @@ pub mod color_themes;
 pub mod boardc;
 pub mod gamec;
 pub mod game_renderer;
+pub mod boardb;
+pub mod gameb;
+pub mod castle;
 
 use atlas::TextureAtlas;
 use binverse::error::BinverseError;
@@ -46,6 +49,7 @@ mod input;
 use crate::boardc::BoardC;
 use crate::color_themes::ColorTheme;
 use crate::game::{Game, Remote, GameState};
+use crate::gameb::GameB;
 use crate::gamec::GameC;
 use crate::input::Control;
 
@@ -143,7 +147,7 @@ fn main() -> Result<(), String> {
     let (versus, server, ai, vai, ip, fen) = parse_args(&mut args);
     let mut mp = false;
 
-    let mut gamec = GameC::versus();
+    let mut gameb = GameB::versus();
     let mut game = Game::versus();
 
 
@@ -307,56 +311,19 @@ fn main() -> Result<(), String> {
         pieces_lifted = !inputs.pressed(Control::Pieces);
 
         if inputs.left_click {
-            if let Some(selected) = game_renderer.selected && gamec.turn().is_me() {
-                gamec.make_move(selected, cursor_field);
+            if let Some(selected) = game_renderer.selected && gameb.turn().is_me() {
+                gameb.make_move(selected, cursor_field);
                 game_renderer.unselect();
 
             } else {
-                game_renderer.select(cursor_field, gamec.turn, &gamec.board);
+                game_renderer.select(cursor_field, gameb.turn, &gameb.board);
             }
         }
 
         game_renderer.update_mouse_pos(inputs.mouse_pos);
-        game_renderer.render(&gamec, &mut renderer, dt);
+        game_renderer.render(&gameb, &mut renderer, dt);
         renderer.render();
 
-
-        /*match game.game_state {
-            GameState::Draw => println!("DRAW!"),
-            GameState::Winner(side) => println!("{} won!", side),
-            GameState::Running => {
-                if inputs.left_click {
-                    if let Some(selected) = board_renderer.selected && game.turn().is_me() && game.make_move(selected, cursor_field) {
-                        board_renderer.unselect();
-
-    
-                    } else {
-                        board_renderer.select(cursor_field, game.turn, &game.board);
-                    }
-                }
-    
-                if game.turn().is_remote() {
-                    try_apply_remote_move(&mut game);
-                }
-    
-                if let PlayerType::Cpu { depth } = game.turn() {
-                    if let Some(next_move) = &next_move_option {
-                        if next_move.is_finished() {
-                            let mv = next_move_option.take().unwrap().join().expect("Thread couldnt be joined");
-                            game.make_move(mv.0, mv.1);
-                        }
-                    } else {
-                        next_move_option = Some(spawn_move_computer(game.board.clone(), *depth, game.turn));
-                    }
-                }
-            }
-        }
-
-
-        board_renderer.update_mouse_pos(inputs.mouse_pos);
-        board_renderer.hover(cursor_field);
-        board_renderer.render(&game, &mut renderer, dt);
-        renderer.render();*/
 
 
         use sdl2::mouse::MouseButton::*;
@@ -367,14 +334,3 @@ fn main() -> Result<(), String> {
 
     Ok(())
 }
-
-
-
-
-    /*let surface = font
-    .render("Hello Rust!")
-    .blended(Color::RGBA(255, 0, 0, 255))
-    .map_err(|e| e.to_string())?;
-    let text_texture = texture_creator
-    .create_texture_from_surface(&surface)
-    .map_err(|e| e.to_string())?;*/

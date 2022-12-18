@@ -1,6 +1,8 @@
 use std::{cmp::{min, max}, slice::Iter};
 
-use crate::{pieces::{Side, PieceType}, pos};
+use vecm::vec::Vec2i;
+
+use crate::{pieces::{Side, PieceType}, pos, board::FenError};
 
 
 
@@ -40,14 +42,14 @@ impl BoardC {
         for (i, pieces_slice) in b_second_rank.chunks(2).enumerate() {
             pieces[i] = combine_pieces(pieces_slice[0], pieces_slice[1])
         }
-        /*for i in 4..=7 {
+        for i in 4..=7 {
             pieces[i] = combine_pieces(b_pawn, b_pawn)
-        }*/
+        }
 
         let w_pawn = b_pawn.to_white();
-        /*for i in 8..=11 {
+        for i in 8..=11 {
             pieces[i] = combine_pieces(w_pawn, w_pawn)
-        }*/
+        }
 
         for (i, pieces_slice) in w_second_rank.chunks(2).enumerate() {
             pieces[i + 12] = combine_pieces(pieces_slice[0], pieces_slice[1])
@@ -347,6 +349,7 @@ impl BoardC {
         }
         material
     }
+
 
     pub fn print_board(&self) {
         for y in 0..8 {
