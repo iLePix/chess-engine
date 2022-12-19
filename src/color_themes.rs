@@ -10,12 +10,13 @@ pub struct ColorTheme {
     pub selection: Color,
     pub check: Color,
     pub last_move_primary: Color,
-    pub last_move_secondary: Color
+    pub last_move_secondary: Color,
+    pub progress: Color,
 }
 
 impl ColorTheme {
-    pub fn new(board_primary: Color, board_secondary: Color, valid_moves: Color, selection: Color, check: Color, last_move: Color, last_move_primary: Color,  last_move_secondary: Color) -> Self {
-        Self {board_primary, board_secondary, valid_moves, selection, check, last_move_primary,  last_move_secondary}
+    pub fn new(board_primary: Color, board_secondary: Color, valid_moves: Color, selection: Color, check: Color, last_move: Color, last_move_primary: Color,  last_move_secondary: Color, progress: Color) -> Self {
+        Self {board_primary, board_secondary, valid_moves, selection, check, last_move_primary,  last_move_secondary, progress}
     }
 
     pub fn blue_theme() -> Self {
@@ -26,7 +27,8 @@ impl ColorTheme {
             selection: Color::RGBA(255, 123, 98, 200),
             last_move_primary: Color::RGB(169,202,142),
             last_move_secondary: Color::RGB(124,172,112),
-            check: Color::RGB(230,55,96)
+            check: Color::RGB(230,55,96),
+            progress: Color::RGB(46, 204, 113)
         }
     }
 
@@ -38,7 +40,8 @@ impl ColorTheme {
             selection: Color::RGBA(255, 123, 98, 200),
             last_move_primary: Color::RGB(226,242,108),
             last_move_secondary: Color::RGB(186,202,68),
-            check: Color::RGB(230,55,96)
+            check: Color::RGB(230,55,96),
+            progress: Color::RGB(46, 204, 113)
         }
     }
 
@@ -50,7 +53,8 @@ impl ColorTheme {
             selection: Color::RGBA(255, 123, 98, 200),
             last_move_primary: Color::RGB(226,242,108),
             last_move_secondary: Color::RGB(186,202,68),
-            check: Color::RGB(13,56,166)
+            check: Color::RGB(13,56,166),
+            progress: Color::RGB(46, 204, 113)
         }
     }
 

@@ -120,7 +120,9 @@ impl GameRenderer {
     fn draw_valid_moves(&mut self, game: &GameB, dt: f32, renderer: &mut Renderer) {
         if let Some(selected) = self.selected {
             self.valid_mvs_tick = self.increment_tick(self.valid_mvs_tick, self.field_size as f32 * 0.75, dt);
-            let mvs = game.possible_moves.get(&selected).expect("No moves for selected piece");
+            let Some(mvs) = game.possible_moves.get(&selected) else {
+                return
+            };
             for x in 0..8 {
                 for y in 0..8 {
                     let i = y * 8 + x;
@@ -153,14 +155,15 @@ impl GameRenderer {
     }
 
     fn draw_ai_progress(&self, renderer: &mut Renderer) {
-        fn draw_progress(y: i32, progress: Option<f32>, renderer: &mut Renderer) {
+        fn draw_progress(y: i32, progress: Option<f32>, color: Color, renderer: &mut Renderer) {
             if let Some(progress) = progress {
-                let rect = Rect::new(0,y, (progress * 400.0) as u32, 10);
-                renderer.draw_rect(rect, Color::RED, 3);
+                let rect = Rect::new(200 - (progress * 200.0) as i32 ,y, (progress * 400.0) as u32, 3);
+                renderer.draw_rect(rect, color, 3);
             }
         }
-        draw_progress(390, self.ai_progess.0, renderer);
-        draw_progress(0, self.ai_progess.1, renderer);
+        let color = self.color_theme().progress;
+        draw_progress(397, self.ai_progess.0, color, renderer);
+        draw_progress(0, self.ai_progess.1, color, renderer);
     }
 
     pub fn render(&mut self, game: &GameB, renderer: &mut Renderer, dt: f32) {
