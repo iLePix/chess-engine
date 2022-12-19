@@ -21,6 +21,7 @@ pub  struct GameRenderer {
     valid_mvs_tick: f32,
     last_move_tick: f32,
     s_tick: f32,
+    p_tick: f32,
     animation_increment: f32,
 }
 
@@ -54,7 +55,8 @@ impl GameRenderer {
             animation_increment,
             last_move: None,
             mouse_pos: Vec2u::zero(), 
-            s_tick: 0.0
+            s_tick: 0.0,
+            p_tick: 0.0
         }
     }
 
@@ -62,6 +64,16 @@ impl GameRenderer {
         let mut t = tick;
         if tick < max_size {
             t+= self.animation_increment * dt;
+        } else {
+            t = max_size;
+        }
+        t
+    }
+
+    fn increment_tick_by(&self, tick: f32, increment: f32, max_size: f32, dt: f32) -> f32 {
+        let mut t = tick;
+        if tick < max_size {
+            t+= increment * dt;
         } else {
             t = max_size;
         }
@@ -154,16 +166,19 @@ impl GameRenderer {
         }
     }
 
-    fn draw_ai_progress(&self, renderer: &mut Renderer) {
-        fn draw_progress(y: i32, progress: Option<f32>, color: Color, renderer: &mut Renderer) {
+    fn draw_ai_progress(&mut self, dt: f32, renderer: &mut Renderer) {
+        fn draw_progress(s: &mut GameRenderer, y: i32, progress: Option<f32>, color: Color, dt: f32, renderer: &mut Renderer) {
             if let Some(progress) = progress {
-                let rect = Rect::new(200 - (progress * 200.0) as i32 ,y, (progress * 400.0) as u32, 3);
+                let left = progress * 720.0;
+                s.p_tick = s.increment_tick_by(s.p_tick, (left - s.p_tick) * 15.0, progress * 720.0, dt);
+                let rect = Rect::new(360 - (s.p_tick / 2.0) as i32 ,y, s.p_tick as u32, 8);
                 renderer.draw_rect(rect, color, 3);
             }
         }
         let color = self.color_theme().progress;
-        draw_progress(397, self.ai_progess.0, color, renderer);
-        draw_progress(0, self.ai_progess.1, color, renderer);
+        let ai_progress = self.ai_progess;
+        draw_progress(self, 712, ai_progress.0, color, dt, renderer);
+        draw_progress(self, 0, ai_progress.1, color, dt, renderer);
     }
 
     pub fn render(&mut self, game: &GameB, renderer: &mut Renderer, dt: f32) {
@@ -211,7 +226,7 @@ impl GameRenderer {
         self.draw_check(game, renderer);
         self.draw_valid_moves(game, dt, renderer);
         self.draw_selection(game, dt, renderer);
-        self.draw_ai_progress(renderer);
+        self.draw_ai_progress(dt, renderer);
     }
 
 

@@ -188,13 +188,13 @@ fn main() -> Result<(), String> {
     let font_path = &Path::new("../../res/IBMPlexSerif-Medium.ttf");
     let sdl_context = sdl2::init()?;
     let video_subsystem = sdl_context.video()?;
-    let _image_context = sdl2::image::init(InitFlag::PNG | InitFlag::JPG)?;
+    let image_context = sdl2::image::init(InitFlag::PNG | InitFlag::JPG)?;
     let ttf_context = sdl2::ttf::init().map_err(|e| e.to_string())?;
     let mut font = ttf_context.load_font(font_path, 128)?;
     font.set_style(sdl2::ttf::FontStyle::BOLD);
 
 
-    let window = video_subsystem.window("Chess", 400, 400)
+    let window = video_subsystem.window("Chess", 720, 720)
         //.resizable()
         .position_centered()
         .build()
@@ -203,7 +203,7 @@ fn main() -> Result<(), String> {
     let mut canvas: Canvas<sdl2::video::Window> = window.into_canvas().build()
         .expect("could not make a canvas");
     
-    let mut screen_size = Vec2u::new(400, 400);
+    let mut screen_size = Vec2u::new(720, 720);
     canvas.set_blend_mode(sdl2::render::BlendMode::Blend);
     canvas.set_draw_color(Color::RGB(0, 0, 0));
     canvas.clear();
@@ -215,7 +215,7 @@ fn main() -> Result<(), String> {
     let pieces_texture = texture_creator.load_texture(chess_pieces)?;
     let tex_atlas = TextureAtlas::new(&pieces_texture, 90);
 
-    let field_size = 50;
+    let field_size = 90;
     let board_size = Vec2u::fill(8);
 
     let mut color_lifted = true;
