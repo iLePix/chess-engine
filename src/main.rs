@@ -206,7 +206,7 @@ fn main() -> Result<(), String> {
     let mut color_lifted = true;
     let mut pieces_lifted = true;
 
-    let mut renderer = Renderer::new(&tex_atlas, 200.0, &mut canvas);
+    let mut renderer = Renderer::new(&tex_atlas, &mut canvas);
     let mut game_renderer = GameRenderer::new(field_size, board_size, 100.0);
     let (progress_sender, progress_rx) = mpsc::channel();
 
@@ -338,7 +338,7 @@ fn main() -> Result<(), String> {
                 _ => {}
             }
         }
-        
+
         use sdl2::mouse::MouseButton::*;
         inputs.mouse_up(Left);
         inputs.mouse_up(Right);

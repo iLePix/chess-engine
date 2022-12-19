@@ -13,14 +13,12 @@ pub struct Renderer<'a> {
     rects: Vec<(Rect, Color, i32)>,
     images: Vec<((PieceType, Side), Rect, i32)>,
     last_frame_time: Instant,
-    s_tick: f32,
-    s_tick_increment: f32
 }
 
 
 impl<'a> Renderer<'a> {
-    pub fn new(tex_atlas: &'a TextureAtlas<'a>, s_tick_increment: f32, canvas: &'a mut Canvas<Window>) -> Self {
-        Self {tex_atlas, rects: Vec::new(), images: Vec::new(), last_frame_time: Instant::now(), s_tick: 0.0, s_tick_increment, canvas}
+    pub fn new(tex_atlas: &'a TextureAtlas<'a>, canvas: &'a mut Canvas<Window>) -> Self {
+        Self {tex_atlas, rects: Vec::new(), images: Vec::new(), last_frame_time: Instant::now(), canvas}
     }
     
     pub fn draw_rect(&mut self, rect: Rect, color: Color, depth: i32) {
