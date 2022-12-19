@@ -1,7 +1,7 @@
 use sdl2::{rect::{Rect, Point}, pixels::Color, render};
 use vecm::vec::{Vec2u, Vec2i};
 
-use crate::{color_themes::ColorTheme, pieces::Side, gamec::{GameC, i_to_xy}, renderer::{Renderer, self}, pos, gameb::GameB, boardb::{BoardB, Piece}};
+use crate::{color_themes::ColorTheme, pieces::{Side, PieceType}, gamec::{GameC, i_to_xy}, renderer::{Renderer, self}, pos, gameb::GameB, boardb::{BoardB, Piece, Pos, PosTrait}};
 
 
 
@@ -92,12 +92,26 @@ impl GameRenderer {
                 -1.0 * (0.125 * x as f32 - 16.0).powi(2) + 256.0
             }
             self.s_tick = self.increment_tick(self.s_tick, 255.0, dt);
+            if self.s_tick == 255.0 {self.s_tick = 0.0};
             let p = parabola(self.s_tick as i32) / 20.0;
             let size = self.field_size + p as u32;
             let dst = Rect::from_center(Point::new(self.mouse_pos.x as i32, self.mouse_pos.y as i32), size, size);
             renderer.draw_image(piece.ty, piece.side, dst, 3);
         } else {
             self.s_tick = 0.0;
+        }
+    }
+
+    //could also use game.possible moves but its not an array - this might be unefficient
+    fn draw_check(&mut self, game: &GameB, renderer: &mut Renderer) {
+        if game.check.0 {
+            let king = Pos::from_i(game.board.kings.0);
+            let rect = Rect::new(king.x as i32 * self.field_size as i32, king.y as i32 * self.field_size as i32, self.field_size, self.field_size);
+            renderer.draw_rect(rect, self.color_theme().check, 1);
+        } else if game.check.1 {
+            let king = Pos::from_i(game.board.kings.1);
+            let rect = Rect::new(king.x as i32 * self.field_size as i32, king.y as i32 * self.field_size as i32, self.field_size, self.field_size);
+            renderer.draw_rect(rect, self.color_theme().check, 1);
         }
     }
 
@@ -144,7 +158,7 @@ impl GameRenderer {
 
         for x in 0..8 {
             for y in 0..8 {
-                let i = pos![x,y];
+                let i = pos!(x,y);
                 if let Some(piece) = game.board.get_piece_at_pos(i) {
                     //dont draw selected Piece
                     if let Some(selected) = self.selected && selected == i {
@@ -162,13 +176,14 @@ impl GameRenderer {
                     {
                         pos -= 5;
                         size += 10;
-
                     }
+
+                    let rect = Rect::new(pos.x,pos.y, size, size);
 
                     renderer.draw_image(
                         piece.ty,
                         piece.side,
-                        Rect::new(pos.x,pos.y, size, size),
+                        rect,
                         2
                     )    
 
@@ -176,8 +191,8 @@ impl GameRenderer {
             }
         }
 
-        //draw last move
         self.draw_last_move(game, dt, renderer);
+        self.draw_check(game, renderer);
         self.draw_valid_moves(game, dt, renderer);
         self.draw_selection(game, dt, renderer);
     }
@@ -234,7 +249,6 @@ impl GameRenderer {
             self.unselect();
             return None
         }
-
 
         if let Some(selection) = board.get_piece_at_pos(cursor_field) {
             if selection.side == turn {

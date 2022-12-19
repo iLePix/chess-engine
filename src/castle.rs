@@ -2,8 +2,8 @@ use crate::board::FenError;
 
 #[derive(Clone, Copy)]
 pub struct Castle {
-    short: bool,
-    long: bool
+    pub short: bool,
+    pub long: bool
 }
 
 impl Castle {

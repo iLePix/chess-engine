@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use vecm::vec::PolyVec2;
 
-use crate::{game::{PlayerType, GameState, Remote}, pieces::Side, boardb::{BoardB, Piece}, dtos::{self, Move}, board::FenError};
+use crate::{game::{PlayerType, GameState, Remote}, pieces::Side, boardb::{BoardB, Piece, Pos, PosTrait}, dtos::{self, Move}, board::FenError};
 
 
 
@@ -15,6 +15,7 @@ pub struct GameB {
     pub turn: Side,
     pub black: PlayerType,
     pub white: PlayerType,
+    pub check: (bool, bool),
     flipped: bool,
     pub last_move: Option<(u8, u8)>,
 }
@@ -24,6 +25,7 @@ impl GameB {
         let board = BoardB::with_starting_pos();
         let mut mvs = HashMap::with_capacity(16);
         board.valid_moves(Side::White, &mut mvs);
+        let check = (false, false);
         Self {
             state: GameState::Running,
             board,
@@ -32,6 +34,7 @@ impl GameB {
             turn: Side::White,
             white,
             black,
+            check,
             last_move: None,
             flipped
         }
@@ -65,6 +68,8 @@ impl GameB {
         let (board, turn) = BoardB::from_fen(fen)?;
         let mut mvs = HashMap::with_capacity(16);
         board.valid_moves(turn, &mut mvs);
+        let white_check = board.is_check_from_hm(&mvs, Side::White);
+        let black_check =board.is_check_from_hm(&mvs, Side::Black);
         Ok(Self {
             captured_pieces: Vec::new(),
             board,
@@ -72,6 +77,7 @@ impl GameB {
             possible_moves: mvs,
             white,
             black,
+            check: (white_check, black_check),
             turn,
             flipped,
             last_move: None,
@@ -98,7 +104,6 @@ impl GameB {
         }
     }
 
-
     pub fn make_move(&mut self, from: u8, to: u8) {
         let moves_for_pieces = self.possible_moves.get(&from).unwrap();
         if moves_for_pieces & (1 << to) != 0 {
@@ -107,21 +112,28 @@ impl GameB {
             }
             self.last_move = Some((from, to));
             if let PlayerType::Remote(remote) = &mut self.turn_mut() {
-                let f = i_to_xy(from);
-                let t = i_to_xy(to);
+                let f = Pos::from_i(from);
+                let t = Pos::from_i(to);
                 dtos::send(&mut remote.socket, Move {x1: f.x as i8, y1: f.y as i8, x2: t.x as i8, y2: t.y as i8})
                     .expect("Failed to send move")
             };
             self.change_turn();
             self.board.valid_moves(self.turn, &mut self.possible_moves);
+
+            let check = match self.turn {Side::White => self.check.0, Side::Black => self.check.1};
+            if self.possible_moves.iter().filter(|(_, v)| **v > 0).count() == 0 {
+                if check {
+                    self.state = GameState::Winner(!self.turn);
+                } else {
+                    self.state = GameState::Draw;
+                }
+            } // & check then its a draw 
+
+
+            match self.turn {
+                Side::Black => self.check.1 = self.board.is_check(&self.board.valid_moves_as_array(Side::White, false, false), Side::Black),
+                Side::White => self.check.0 =  self.board.is_check(&self.board.valid_moves_as_array(Side::Black, false, false), Side::White),
+            }
         }
     }
-}
-
-type Pos = PolyVec2<i8>;
-
-pub fn i_to_xy(i: u8) -> Pos {
-    let x = i % 8;
-    let y = i / 8;
-    Pos::new(x as i8, y as i8)
 }
