@@ -1,8 +1,8 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, net::TcpStream, sync::mpsc::Receiver};
 
-use vecm::vec::PolyVec2;
+use vecm::vec::{PolyVec2, Vec2i};
 
-use crate::{game::{PlayerType, GameState, Remote}, pieces::Side, boardb::{BoardB, Piece, Pos, PosTrait}, dtos::{self, Move}, board::FenError};
+use crate::{pieces::Side, boardb::{BoardB, Piece, Pos, PosTrait}, dtos::{self, Move}, boardb::FenError};
 
 
 
@@ -136,5 +136,74 @@ impl GameB {
             return false
         }
         true
+    }
+}
+
+
+
+#[derive(Clone, Copy, PartialEq)]
+pub enum GameState {
+    Running,
+    Winner(Side),
+    Draw
+}
+
+pub enum PlayerType {
+    Me,
+    Remote(Remote),
+    Cpu {
+        depth: usize,
+        //computation: Option<JoinHandle<(Vec2i, Vec2i)>>,
+    }
+}
+
+
+impl PlayerType {
+    pub fn is_me(&self) -> bool{
+        match self {
+            PlayerType::Me => true,
+            PlayerType::Remote(_) => false,
+            PlayerType::Cpu { depth } => false,
+        }
+    }
+
+    pub fn is_remote(&self) -> bool{
+        match self {
+            PlayerType::Me => false,
+            PlayerType::Remote(_) => true,
+            PlayerType::Cpu { depth } => false,
+        }
+    }
+
+    pub fn is_ai(&self) -> bool{
+        match self {
+            PlayerType::Me => false,
+            PlayerType::Remote(_) => false,
+            PlayerType::Cpu { depth } => true,
+        }
+    }
+}
+
+
+pub struct Remote {
+    pub socket: TcpStream,
+    pub rx: Receiver<Move>,
+}
+
+impl Remote {
+    pub fn new(socket: TcpStream, rx: Receiver<Move>) -> Self {
+        Self {socket, rx }
+    }
+
+    pub fn send_move(&mut self, from: Vec2i, to: Vec2i) {
+        dtos::send(
+            &mut self.socket, 
+            Move {
+                x1: from.x as i8,
+                y1: 7 - from.y as i8,
+                x2:  to.x as i8,
+                y2: 7 - to.y as i8
+            }
+        ).expect("Could not send move");
     }
 }

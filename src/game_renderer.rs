@@ -1,7 +1,7 @@
 use sdl2::{rect::{Rect, Point}, pixels::Color, render};
 use vecm::vec::{Vec2u, Vec2i};
 
-use crate::{color_themes::ColorTheme, pieces::{Side, PieceType}, gamec::{GameC, i_to_xy}, renderer::{Renderer, self}, pos, gameb::GameB, boardb::{BoardB, Piece, Pos, PosTrait}};
+use crate::{color_themes::ColorTheme, pieces::{Side, PieceType}, renderer::{Renderer, self}, pos, gameb::GameB, boardb::{BoardB, Piece, Pos, PosTrait}};
 
 
 
@@ -85,7 +85,7 @@ impl GameRenderer {
             self.last_move_tick = self.increment_tick(self.last_move_tick, self.field_size as f32, dt);
 
             let mut draw_move = |i: u8, color: Color| {
-                let pos = i_to_xy(i);
+                let pos = Pos::from_i(i);
                 let r_size = Vec2u::fill(self.last_move_tick as u32);
                 let r_center = Vec2i::new(pos.x as i32,pos.y as i32) * self.field_size as i32 + Vec2i::fill(self.field_size as i32 / 2);
                 let rect = Rect::from_center(Point::new(r_center.x, r_center.y), r_size.x, r_size.y);

@@ -2,7 +2,7 @@ use std::{cmp::{min, max}, slice::Iter, collections::HashMap};
 
 use vecm::vec::{Vec2i, PolyVec2};
 
-use crate::{pieces::{Side, PieceType}, pos, castle::{Castle, self}, board::FenError};
+use crate::{pieces::{Side, PieceType}, pos, castle::{Castle, self}};
 
 
 
@@ -600,4 +600,16 @@ impl BitMap for u64 {
 
 pub trait BitMap {
     fn ones(self) -> Vec<u8>;
+}
+
+#[derive(Debug)]
+pub enum FenError {
+    Turn,
+    Cursor,
+    Castle,
+    EnPassant,
+    Pieces,
+    HalfMoves,
+    FullMoves,
+    MissingSection(u32)
 }

@@ -1,16 +1,11 @@
 #![feature(let_chains)]
 #![feature(hash_drain_filter)]
 pub mod pieces;
-pub mod board;
 pub mod macros;
 pub mod atlas;
 pub mod renderer;
-pub mod board_renderer;
 pub mod dtos;
-pub mod game;
 pub mod color_themes;
-pub mod boardc;
-pub mod gamec;
 pub mod game_renderer;
 pub mod boardb;
 pub mod gameb;
@@ -18,11 +13,9 @@ pub mod castle;
 
 use atlas::TextureAtlas;
 use binverse::error::BinverseError;
-use board::{Board};
-use board_renderer::BoardRenderer;
 use game_renderer::GameRenderer;
 use dtos::{PlayerInfo, Move, GameInfo};
-use game::PlayerType;
+use gameb::PlayerType;
 use pieces::{Piece, Side};
 use input::InputHandler;
 use renderer::Renderer;
@@ -48,11 +41,8 @@ mod input;
 
 
 use crate::boardb::{Pos, PosTrait, BoardB, BitMap};
-use crate::boardc::BoardC;
 use crate::color_themes::ColorTheme;
-use crate::game::{Game, Remote, GameState};
-use crate::gameb::GameB;
-use crate::gamec::GameC;
+use crate::gameb::{GameB, Remote, GameState};
 use crate::input::Control;
 
 fn receive_mvs(mut tcp_stream: TcpStream, moves: mpsc::Sender<Move>) -> Result<(), BinverseError> {

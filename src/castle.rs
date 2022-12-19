@@ -1,4 +1,4 @@
-use crate::board::FenError;
+use crate::boardb::FenError;
 
 #[derive(Clone, Copy)]
 pub struct Castle {
