@@ -170,7 +170,7 @@ impl GameRenderer {
         fn draw_progress(s: &mut GameRenderer, y: i32, progress: Option<f32>, color: Color, dt: f32, renderer: &mut Renderer) {
             if let Some(progress) = progress {
                 let left = progress * 720.0;
-                s.p_tick = s.increment_tick_by(s.p_tick, (left - s.p_tick) * 15.0, progress * 720.0, dt);
+                s.p_tick = s.increment_tick_by(s.p_tick, (left - s.p_tick).powf(1.4), progress * 720.0, dt);
                 let rect = Rect::new(360 - (s.p_tick / 2.0) as i32 ,y, s.p_tick as u32, 8);
                 renderer.draw_rect(rect, color, 3);
             }
