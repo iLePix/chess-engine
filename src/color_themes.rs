@@ -22,13 +22,13 @@ impl ColorTheme {
     pub fn blue_theme() -> Self {
         Self {
             board_primary: Color::WHITE,
-            board_secondary: Color::RGB(13,56,166),
+            board_secondary: Color::RGB(13, 56, 166),
             valid_moves: Color::RGBA(3, 138, 255, 128),
             selection: Color::RGBA(255, 123, 98, 200),
             last_move_primary: Color::RGB(169,202,142),
             last_move_secondary: Color::RGB(124,172,112),
             check: Color::RGB(230,55,96),
-            progress: Color::RGB(46, 204, 113)
+            progress: Color::RGB(9, 132, 227)
         }
     }
 
@@ -41,7 +41,7 @@ impl ColorTheme {
             last_move_primary: Color::RGB(226,242,108),
             last_move_secondary: Color::RGB(186,202,68),
             check: Color::RGB(230,55,96),
-            progress: Color::RGB(46, 204, 113)
+            progress: Color::RGB(136, 206, 106)
         }
     }
 
@@ -54,7 +54,7 @@ impl ColorTheme {
             last_move_primary: Color::RGB(226,242,108),
             last_move_secondary: Color::RGB(186,202,68),
             check: Color::RGB(13,56,166),
-            progress: Color::RGB(46, 204, 113)
+            progress: Color::RGB(253, 121, 168)
         }
     }
 
