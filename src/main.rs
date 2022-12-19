@@ -16,32 +16,27 @@ use binverse::error::BinverseError;
 use game_renderer::GameRenderer;
 use dtos::{PlayerInfo, Move, GameInfo};
 use gameb::PlayerType;
-use pieces::{Piece, Side};
+use pieces::Side;
 use input::InputHandler;
 use renderer::Renderer;
 use sdl2::image::{LoadTexture, InitFlag};
-use sdl2::event::Event;
-use sdl2::keyboard::{Keycode, Mod};
-use sdl2::{rect::{Rect, Point}, pixels::Color, render::{Canvas, Texture}, video::Window, sys::PropModePrepend};
-use vecm::vec::{Vec2i, Vec2u, Vec2, VecInto};
+use sdl2::{pixels::Color, render::Canvas};
+use vecm::vec::Vec2u;
 
-use std::cmp::min;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::env::Args;
 use std::net::TcpStream;
-use std::ops::Add;
 use std::path::Path;
-use std::sync::mpsc::{self, TryRecvError, Receiver, Sender};
+use std::sync::mpsc::{self, TryRecvError, Sender};
 use std::thread::JoinHandle;
 //use world::celo::Celo;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 use rand::Rng;
 
 mod input; 
 
 
 use crate::boardb::{Pos, PosTrait, BoardB, BitMap};
-use crate::color_themes::ColorTheme;
 use crate::gameb::{GameB, Remote, GameState};
 use crate::input::Control;
 
@@ -343,9 +338,7 @@ fn main() -> Result<(), String> {
                 _ => {}
             }
         }
-
-
-
+        
         use sdl2::mouse::MouseButton::*;
         inputs.mouse_up(Left);
         inputs.mouse_up(Right);
