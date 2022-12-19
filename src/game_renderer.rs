@@ -14,6 +14,7 @@ pub  struct GameRenderer {
     themes: [ColorTheme; 3],
     theme_index: usize,
     pub selected: Option<u8>,
+    pub ai_progess: (Option<f32>, Option<f32>),
     mouse_pos: Vec2u,
     last_move: Option<(u8, u8)>,
     //animation
@@ -49,6 +50,7 @@ impl GameRenderer {
             field_size, 
             themes,
             theme_index,
+            ai_progess: (None, None),
             animation_increment,
             last_move: None,
             mouse_pos: Vec2u::zero(), 
@@ -150,6 +152,17 @@ impl GameRenderer {
         }
     }
 
+    fn draw_ai_progress(&self, renderer: &mut Renderer) {
+        fn draw_progress(y: i32, progress: Option<f32>, renderer: &mut Renderer) {
+            if let Some(progress) = progress {
+                let rect = Rect::new(0,y, (progress * 400.0) as u32, 10);
+                renderer.draw_rect(rect, Color::RED, 3);
+            }
+        }
+        draw_progress(390, self.ai_progess.0, renderer);
+        draw_progress(0, self.ai_progess.1, renderer);
+    }
+
     pub fn render(&mut self, game: &GameB, renderer: &mut Renderer, dt: f32) {
         let turn = game.turn;
         for rect in &self.board_ground {
@@ -195,6 +208,7 @@ impl GameRenderer {
         self.draw_check(game, renderer);
         self.draw_valid_moves(game, dt, renderer);
         self.draw_selection(game, dt, renderer);
+        self.draw_ai_progress(renderer);
     }
 
 

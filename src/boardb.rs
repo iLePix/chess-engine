@@ -242,8 +242,10 @@ impl BoardB {
                 if self.is_check_after(i, to, side) {
                     mv_map ^= 1 << to;
                 }
+            } 
+            if mv_map > 0 {
+                mvs.insert(i, mv_map);
             }
-            mvs.insert(i, mv_map);
         }
     }
 

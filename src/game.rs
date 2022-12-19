@@ -107,7 +107,7 @@ impl Game {
 
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq)]
 pub enum GameState {
     Running,
     Winner(Side),

@@ -104,7 +104,7 @@ impl GameB {
         }
     }
 
-    pub fn make_move(&mut self, from: u8, to: u8) {
+    pub fn make_move(&mut self, from: u8, to: u8) -> bool {
         let moves_for_pieces = self.possible_moves.get(&from).unwrap();
         if moves_for_pieces & (1 << to) != 0 {
             if let Some(captured_piece) = self.board.make_move(from, to) {
@@ -127,13 +127,14 @@ impl GameB {
                 } else {
                     self.state = GameState::Draw;
                 }
-            } // & check then its a draw 
+            } 
 
-
-            match self.turn {
-                Side::Black => self.check.1 = self.board.is_check(&self.board.valid_moves_as_array(Side::White, false, false), Side::Black),
-                Side::White => self.check.0 =  self.board.is_check(&self.board.valid_moves_as_array(Side::Black, false, false), Side::White),
-            }
+            self.check.1 = self.board.is_check(&self.board.valid_moves_as_array(Side::White, false, false), Side::Black);
+            self.check.0 =  self.board.is_check(&self.board.valid_moves_as_array(Side::Black, false, false), Side::White);
+            
+        } else {
+            return false
         }
+        true
     }
 }

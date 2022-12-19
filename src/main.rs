@@ -32,12 +32,13 @@ use sdl2::keyboard::{Keycode, Mod};
 use sdl2::{rect::{Rect, Point}, pixels::Color, render::{Canvas, Texture}, video::Window, sys::PropModePrepend};
 use vecm::vec::{Vec2i, Vec2u, Vec2, VecInto};
 
+use std::cmp::min;
 use std::collections::{HashMap, HashSet};
 use std::env::Args;
 use std::net::TcpStream;
 use std::ops::Add;
 use std::path::Path;
-use std::sync::mpsc::{self, TryRecvError, Receiver};
+use std::sync::mpsc::{self, TryRecvError, Receiver, Sender};
 use std::thread::JoinHandle;
 //use world::celo::Celo;
 use std::time::{Duration, Instant};
@@ -46,6 +47,7 @@ use rand::Rng;
 mod input; 
 
 
+use crate::boardb::{Pos, PosTrait, BoardB, BitMap};
 use crate::boardc::BoardC;
 use crate::color_themes::ColorTheme;
 use crate::game::{Game, Remote, GameState};
@@ -125,12 +127,12 @@ fn connect(ip: String) -> Result<MultiplayerUtils, ConnectionError> {
     Ok(MultiplayerUtils { tcp_stream, moves_rx: rx, my_side})
 }
 
-fn try_apply_remote_move(game: &mut Game) {
+fn try_apply_remote_move(game: &mut GameB) {
     if let PlayerType::Remote(remote) = &game.turn() {
         match remote.rx.try_recv() {
             Ok(new_move) => {
                 println!("Receiving move {:?} for {:?}", new_move, game.turn);
-                if !game.make_move(Vec2i::new(new_move.x1 as i32, 7 - new_move.y1 as i32), Vec2i::new(new_move.x2 as i32, 7 - new_move.y2 as i32)) {
+                if !game.make_move(Pos::new(new_move.x1, 7 - new_move.y1).to_i(), Pos::new(new_move.x2, 7 - new_move.y2).to_i()) {
                     panic!("Opponent move not accepted");
                 }
                 game.change_turn();
@@ -148,7 +150,6 @@ fn main() -> Result<(), String> {
     let mut mp = false;
 
     let mut gameb = GameB::versus();
-    let mut game = Game::versus();
 
 
     if let Some(ip)  = ip {
@@ -156,7 +157,7 @@ fn main() -> Result<(), String> {
             Ok(utils) => {mp = true; utils},
             Err(err) => panic!("Error connecting: {:?}", err)
         };
-        game = Game::remote(
+        gameb = GameB::remote(
             Remote::new(mp_utils.tcp_stream, mp_utils.moves_rx), 
             match mp_utils.my_side {
                 Side::Black => true,
@@ -168,18 +169,18 @@ fn main() -> Result<(), String> {
     if let Some(depth) = ai {
         let mut rng = rand::thread_rng();
         let is_white: bool = rng.gen();
-        game = Game::cpu(depth, is_white)
+        gameb = GameB::cpu(depth, is_white)
     }
 
     if let Some(depth) = vai {
-        game = Game::vcpu(depth)
+        gameb = GameB::vcpu(depth)
     }
 
     if let Some(fen) = fen {
-       match Board::from_fen(&fen) {
-        Ok((b,t)) => {game.board = b; game.turn = t},
+       match BoardB::from_fen(&fen) {
+        Ok((b,t)) => {gameb.board = b; gameb.turn = t},
         Err(err) => println!("Fen error: {:?}", err),
-    }
+        }
     }
 
 
@@ -212,7 +213,7 @@ fn main() -> Result<(), String> {
     let chess_pieces = &Path::new("../../res/chess_pieces.png");
     let texture_creator = canvas.texture_creator();
     let pieces_texture = texture_creator.load_texture(chess_pieces)?;
-    let mut tex_atlas = TextureAtlas::new(&pieces_texture, 90);
+    let tex_atlas = TextureAtlas::new(&pieces_texture, 90);
 
     let field_size = 50;
     let board_size = Vec2u::fill(8);
@@ -221,9 +222,8 @@ fn main() -> Result<(), String> {
     let mut pieces_lifted = true;
 
     let mut renderer = Renderer::new(&tex_atlas, 200.0, &mut canvas);
-    game.board.calculate_valid_moves(game.turn);
-    let mut board_renderer = BoardRenderer::new(field_size, board_size, 2.0);
     let mut game_renderer = GameRenderer::new(field_size, board_size, 100.0);
+    let (progress_sender, progress_rx) = mpsc::channel();
 
 
 
@@ -231,57 +231,61 @@ fn main() -> Result<(), String> {
 
 
 
-    fn spawn_move_computer(board: Board, depth: usize, turn: Side) -> JoinHandle<(Vec2i, Vec2i)> { 
+    fn spawn_move_computer(board: BoardB, depth: usize, turn: Side, progress_sender: Sender<f32>) -> JoinHandle<(u8, u8)> { 
         std::thread::spawn(move || {
-            compute_best_move(&board, depth, turn, true).0
+            let mut next_moves_by_piece = HashMap::with_capacity(16);
+            board.valid_moves(turn, &mut next_moves_by_piece);
+            let mut best_move = ((0,0), i32::MIN);
+            let mvs = next_moves_by_piece.iter().flat_map(|(from, tos)| tos.ones().iter().map(|to| (*from, *to)).collect::<Vec<_>>()).collect::<Vec<(u8, u8)>>();
+            let total = mvs.len();
+            let mut progress = 0;
+            for (from, to) in mvs {
+                progress += 1;
+                progress_sender.send(progress as f32 / total as f32).unwrap();
+                let mut b = board;
+                b.make_move(from, to);
+                let eval = compute_best_move(b, depth - 1, !turn, turn, i32::MIN, i32::MAX);
+                if eval > best_move.1 {
+                    best_move = ((from, to), eval);
+                }
+            }
+            best_move.0
         })
     }
 
-    /*fn minimax(board: &Board, depth: usize, maximizing_side: Side) -> i32 {
-        if depth == 0 { //or game is over
-            return board.evaluate(maximizing_side) // maximzing side right?
+
+
+
+    fn compute_best_move(board: BoardB, depth: usize, turn: Side, max: Side, mut alpha: i32, mut beta: i32) -> i32 { 
+        let mut next_moves_by_piece = HashMap::with_capacity(16);
+        board.valid_moves(turn, &mut next_moves_by_piece);
+        if next_moves_by_piece.len() == 0 || depth == 0 {
+            return board.evaluate(turn);
         }
-
-    }*/
-
-
-
-    fn compute_best_move(board: &Board, depth: usize, turn: Side, is_top: bool) -> ((Vec2i, Vec2i), i32) { 
-        let next_moves_by_piece = board.valid_moves.clone();
-        let mut best_move = ((Vec2i::zero(), Vec2i::zero()), std::i32::MIN);
-        let mut progress = 0;
-        let total: i32 = next_moves_by_piece.iter().map(|(_,v)| v.len() as i32).sum();
-        for (piece_pos, mvs) in next_moves_by_piece {
-            for dst in mvs {
-                if is_top {
-                    progress +=1;
-                    println!("{} / {}", progress, total)
+        let mut t_eval = if turn == max {i32::MIN} else {i32::MAX};
+        let mvs = next_moves_by_piece.iter().flat_map(|(from, tos)| tos.ones().iter().map(|to| (*from, *to)).collect::<Vec<_>>()).collect::<Vec<(u8, u8)>>();
+        for (from, to) in mvs {
+            let mut b = board;
+            b.make_move(from, to);
+            let eval = compute_best_move(b, depth - 1, !turn, max, alpha, beta);
+            if turn == max {
+                t_eval = t_eval.max(eval);
+                alpha = alpha.max(eval);
+                if beta <= alpha {
+                    break;
                 }
-                let mut board = board.clone();
-                let eval = match board.make_move(&piece_pos, &dst, turn) {
-                    Ok(game_state) => {
-                        match game_state {
-                            GameState::Running => {if depth == 0 {
-                                board.evaluate(turn)
-                            } else {
-                                -compute_best_move(&board, depth - 1, !turn, false).1
-                            }},
-                            GameState::Winner(side) => {if turn == side {i32::MAX} else {i32::MIN}}
-                            GameState::Draw => i32::MIN,
-                        }
-                    },
-                    Err(_) => {0},
-                };
-                if eval > best_move.1 {
-                    best_move = ((piece_pos, dst), eval);
+            } else {
+                t_eval = t_eval.min(eval);
+                beta = beta.min(eval);
+                if beta <= alpha {
+                    break;
                 }
             }
-        }
-        best_move
+        }  
+        return t_eval;
     }
 
-    let mut next_move_option: Option<JoinHandle<(Vec2i, Vec2i)>> = None;
-
+    let mut next_move_option: Option<JoinHandle<(u8, u8)>> = None;
 
     'running: loop {
         let current_frame_time = Instant::now();
@@ -314,7 +318,6 @@ fn main() -> Result<(), String> {
             if let Some(selected) = game_renderer.selected && gameb.turn().is_me() {
                 gameb.make_move(selected, cursor_field);
                 game_renderer.unselect();
-
             } else {
                 game_renderer.select(cursor_field, gameb.turn, &gameb.board);
             }
@@ -323,6 +326,33 @@ fn main() -> Result<(), String> {
         game_renderer.update_mouse_pos(inputs.mouse_pos);
         game_renderer.render(&gameb, &mut renderer, dt);
         renderer.render();
+
+        if gameb.state == GameState::Running {
+            match gameb.turn() {
+                PlayerType::Remote(_) => try_apply_remote_move(&mut gameb),
+                PlayerType::Cpu { depth } => {
+                    match progress_rx.try_recv() {
+                        Ok(progress) => {
+                            match gameb.turn {
+                                Side::Black => {game_renderer.ai_progess.1 = Some(progress); game_renderer.ai_progess.0 = None},
+                                Side::White => {game_renderer.ai_progess.0 = Some(progress); game_renderer.ai_progess.1 = None},
+                            }
+                        },
+                        Err(TryRecvError::Empty) => {},
+                        Err(TryRecvError::Disconnected) => {},
+                    }
+                    if let Some(next_move) = &next_move_option {
+                        if next_move.is_finished() {
+                            let mv = next_move_option.take().unwrap().join().expect("Thread couldnt be joined");
+                            gameb.make_move(mv.0, mv.1);
+                        }
+                    } else {
+                        next_move_option = Some(spawn_move_computer(gameb.board, *depth, gameb.turn, progress_sender.clone()));
+                    }
+                },
+                _ => {}
+            }
+        }
 
 
 
