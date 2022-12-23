@@ -162,9 +162,9 @@ fn main() -> Result<(), String> {
     }
 
     if let Some(fen) = fen {
-       match BoardB::from_fen(&fen) {
-        Ok((b,t)) => {gameb.board = b; gameb.turn = t},
-        Err(err) => println!("Fen error: {:?}", err),
+       gameb = match GameB::from_fen(gameb.white, gameb.black, &fen, false) {
+        Ok(g) => g,
+        Err(err) => panic!("Fen error: {:?}", err),
         }
     }
 
@@ -207,7 +207,7 @@ fn main() -> Result<(), String> {
     let mut pieces_lifted = true;
 
     let mut renderer = Renderer::new(&tex_atlas, &mut canvas);
-    let mut game_renderer = GameRenderer::new(field_size, board_size, 100.0);
+    let mut game_renderer = GameRenderer::new(field_size, board_size, 200.0);
     let (progress_sender, progress_rx) = mpsc::channel();
 
 
@@ -233,7 +233,9 @@ fn main() -> Result<(), String> {
                 if eval > best_move.1 {
                     best_move = ((from, to), eval);
                 }
+                println!("from: {} to: {} val: {}", Pos::from_i(from), Pos::from_i(to), eval);
             }
+            println!("done");
             best_move.0
         })
     }
@@ -244,8 +246,14 @@ fn main() -> Result<(), String> {
     fn compute_best_move(board: BoardB, depth: usize, turn: Side, max: Side, mut alpha: i32, mut beta: i32) -> i32 { 
         let mut next_moves_by_piece = HashMap::with_capacity(16);
         board.valid_moves(turn, &mut next_moves_by_piece);
-        if next_moves_by_piece.len() == 0 || depth == 0 {
-            return board.evaluate(turn);
+        /*if next_moves_by_piece.len() == 0 {
+            if board.is_check(&board.valid_moves_as_array(!turn, false, true), turn) {
+                return if turn == max {i32::MIN} else {i32::MAX}
+            }
+            return i32::MIN
+        }*/
+        if depth == 0 || next_moves_by_piece.len() == 0 {
+            return board.evaluate(max);
         }
         let mut t_eval = if turn == max {i32::MIN} else {i32::MAX};
         let mvs = next_moves_by_piece.iter().flat_map(|(from, tos)| tos.ones().iter().map(|to| (*from, *to)).collect::<Vec<_>>()).collect::<Vec<(u8, u8)>>();
@@ -311,6 +319,12 @@ fn main() -> Result<(), String> {
         game_renderer.update_mouse_pos(inputs.mouse_pos);
         game_renderer.render(&gameb, &mut renderer, dt);
         renderer.render();
+
+        if let GameState::Winner(w) = gameb.state {
+            println!("{} won !!", w);
+        } else if GameState::Draw == gameb.state {
+            println!("draw");
+        }
 
         if gameb.state == GameState::Running {
             match gameb.turn() {

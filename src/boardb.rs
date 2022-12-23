@@ -50,6 +50,36 @@ impl BoardB {
         }
     }
 
+    pub fn with_check_test() -> Self {
+        let mut board = [None; 64];
+
+        for x in 0..=7 {
+            board[pos!(x, 1)] = Some(Piece::new(PieceType::Pawn, Side::Black));
+            board[pos!(x, 6)] = Some(Piece::new(PieceType::Pawn, Side::White));
+        }
+    
+        let first_rank = {
+            use PieceType::*;
+            [Rook, Knight, Bishop, Queen, King, Bishop, Knight, Rook]
+        };
+    
+        for (x, piece_ty) in first_rank.iter().enumerate() {
+            board[pos!(x, 0)]  = Some(Piece::new(*piece_ty, Side::Black));
+            board[pos!(x, 7)]  = Some(Piece::new(*piece_ty, Side::White))
+        }
+    
+        let castle = Castle::new();
+        let kings = (60, 4);
+
+        Self {
+            board,
+            white_castle: castle,
+            black_castle: castle,
+            kings,
+            en_passant: 64
+        }
+    }
+
     pub fn occupied(&self, i: u8) -> bool {
         self.board.get(i as usize).unwrap().is_some()
     }
@@ -303,6 +333,7 @@ impl BoardB {
                         self.kings.0 = to;
                     },
                 }
+                self.en_passant = 64
             },
             PieceType::Rook => {
                 let rook = |y: i8, castle: &mut Castle| {
@@ -316,6 +347,7 @@ impl BoardB {
                     Side::Black => rook(0, &mut self.black_castle),
                     Side::White => rook(7, &mut self.white_castle)
                 }
+                self.en_passant = 64
             },
             PieceType::Pawn => {
                 let y_dir: i8 = match piece.side {
@@ -589,7 +621,7 @@ pub trait PosTrait {
 impl BitMap for u64 {
     fn ones(self) -> Vec<u8> {
         let mut ones = Vec::new();
-        for n in 0..63 {
+        for n in 0..64 {
             if self >> n & 1 == 1 {
                 ones.push(n);
             }

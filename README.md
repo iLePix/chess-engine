@@ -11,6 +11,9 @@ Still missing
 - [ ] drag & drop
 
 - [ ] selection red rect smaller
+- [ ] moves that check are allowed for square 63
+
+
 
 
 How to run:

@@ -69,7 +69,7 @@ impl GameB {
         let mut mvs = HashMap::with_capacity(16);
         board.valid_moves(turn, &mut mvs);
         let white_check = board.is_check_from_hm(&mvs, Side::White);
-        let black_check =board.is_check_from_hm(&mvs, Side::Black);
+        let black_check = board.is_check_from_hm(&mvs, Side::Black);
         Ok(Self {
             captured_pieces: Vec::new(),
             board,
@@ -105,7 +105,9 @@ impl GameB {
     }
 
     pub fn make_move(&mut self, from: u8, to: u8) -> bool {
-        let moves_for_pieces = self.possible_moves.get(&from).unwrap();
+        let Some(moves_for_pieces) = self.possible_moves.get(&from) else {
+            return false
+        };
         if moves_for_pieces & (1 << to) != 0 {
             if let Some(captured_piece) = self.board.make_move(from, to) {
                 self.captured_pieces.push(captured_piece);
